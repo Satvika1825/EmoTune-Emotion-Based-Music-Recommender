@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmoTune - Emotion-Based Music Recommender</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .input-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tab-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .input-method {
+            display: none;
+        }
+
+        .input-method.active {
+            display: block;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-label {
+            display: block;
+            padding: 20px;
+            background: white;
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            background: #f0f0ff;
+            border-color: #764ba2;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        #camera-preview {
+            width: 100%;
+            max-width: 500px;
+            border-radius: 10px;
+            margin: 15px auto;
+            display: block;
+        }
+
+        .result-section {
+            margin-top: 30px;
+        }
+
+        .emotion-result {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .emotion-result h2 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .confidence {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .uploaded-image {
+            max-width: 400px;
+            border-radius: 15px;
+            margin: 20px auto;
+            display: block;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .emotion-selector {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .emotion-selector h3 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .emotion-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .emotion-btn {
+            padding: 15px 10px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-transform: capitalize;
+        }
+
+        .emotion-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .emotion-btn.selected {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .emotion-btn.happy { border-color: #ffc107; }
+        .emotion-btn.sad { border-color: #6c757d; }
+        .emotion-btn.angry { border-color: #dc3545; }
+        .emotion-btn.surprise { border-color: #17a2b8; }
+        .emotion-btn.fear { border-color: #6f42c1; }
+        .emotion-btn.disgust { border-color: #28a745; }
+        .emotion-btn.neutral { border-color: #adb5bd; }
+
+        .tracks-section {
+            margin-top: 30px;
+        }
+
+        .tracks-section h3 {
+            color: #333;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .track-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: all 0.3s;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .track-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+
+        .track-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: #ddd;
+        }
+
+        .track-info {
+            flex: 1;
+        }
+
+        .track-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .track-artist {
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .track-genre {
+            font-size: 0.9em;
+            color: #999;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .error {
+            background: #dc3545;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #667eea;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(3, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .emotion-buttons {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .track-card {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎵 EmoTune</h1>
+            <p>Emotion-Based Music Recommender with Enhanced DeepFace</p>
+        </div>
+
+        <div class="content">
+            {% if error %}
+            <div class="error">
+                ❌ {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="upload-section">
+                <h2 style="margin-bottom: 20px;">Upload Your Image</h2>
+                
+                <div class="input-tabs">
+                    <button class="tab-btn active" onclick="switchTab('file')">📁 File Upload</button>
+                    <button class="tab-btn" onclick="switchTab('camera')">📷 Camera</button>
+                    <button class="tab-btn" onclick="switchTab('url')">🔗 URL</button>
+                </div>
+
+                <!-- File Upload -->
+                <div id="file-input" class="input-method active">
+                    <form method="POST" action="/predict" enctype="multipart/form-data">
+                        <input type="hidden" name="input_type" value="file">
+                        <div class="file-input-wrapper">
+                            <label for="file" class="file-input-label">
+                                <span id="file-label-text">📁 Click to choose an image<br><small>or drag and drop here</small></span>
+                            </label>
+                            <input type="file" name="file" id="file" accept="image/*" required onchange="updateFileLabel(this)">
+                        </div>
+                        <button type="submit" class="btn-primary" style="margin-top: 15px;">Analyze Emotion</button>
+                    </form>
+                </div>
+
+                <!-- Camera Capture -->
+                <div id="camera-input" class="input-method">
+                    <video id="camera-preview" autoplay></video>
+                    <button type="button" class="btn-primary" onclick="capturePhoto()">📸 Capture Photo</button>
+                    <div id="camera-status" style="text-align: center; margin-top: 10px; color: #666;"></div>
+                </div>
+
+                <!-- URL Input -->
+                <div id="url-input" class="input-method">
+                    <form method="POST" action="/predict">
+                        <input type="hidden" name="input_type" value="url">
+                        <input type="text" name="image_url" placeholder="Enter image URL (e.g., https://example.com/image.jpg)" required>
+                        <button type="submit" class="btn-primary">Analyze Emotion</button>
+                    </form>
+                </div>
+            </div>
+
+            {% if emotion %}
+            <div class="result-section">
+                <div class="emotion-result">
+                    <h2>Detected Emotion: {{ emotion }}</h2>
+                    {% if confidence %}
+                    <p class="confidence">Confidence: {{ confidence }}%</p>
+                    {% endif %}
+                </div>
+
+                {% if image_path %}
+                <img src="{{ url_for('static', filename=image_path) }}" alt="Uploaded Image" class="uploaded-image">
+                {% endif %}
+
+                <!-- Manual Emotion Selection -->
+                <div class="emotion-selector">
+                    <h3>Not quite right? Select the correct emotion:</h3>
+                    <div class="emotion-buttons">
+                        <button class="emotion-btn happy {% if emotion.lower() == 'happy' %}selected{% endif %}" onclick="changeEmotion('happy')">😊 Happy</button>
+                        <button class="emotion-btn sad {% if emotion.lower() == 'sad' %}selected{% endif %}" onclick="changeEmotion('sad')">😢 Sad</button>
+                        <button class="emotion-btn angry {% if emotion.lower() == 'angry' %}selected{% endif %}" onclick="changeEmotion('angry')">😠 Angry</button>
+                        <button class="emotion-btn surprise {% if emotion.lower() == 'surprise' %}selected{% endif %}" onclick="changeEmotion('surprise')">😲 Surprise</button>
+                        <button class="emotion-btn fear {% if emotion.lower() == 'fear' %}selected{% endif %}" onclick="changeEmotion('fear')">😨 Fear</button>
+                        <button class="emotion-btn disgust {% if emotion.lower() == 'disgust' %}selected{% endif %}" onclick="changeEmotion('disgust')">🤢 Disgust</button>
+                        <button class="emotion-btn neutral {% if emotion.lower() == 'neutral' %}selected{% endif %}" onclick="changeEmotion('neutral')">😐 Neutral</button>
+                    </div>
+                </div>
+
+                {% if tracks %}
+                <div class="tracks-section" id="tracks-container">
+                    <h3>🎵 Recommended Songs</h3>
+                    {% for track in tracks %}
+                    <div class="track-card">
+                        {% if track.image %}
+                        <img src="{{ track.image }}" alt="{{ track.name }}" class="track-image">
+                        {% else %}
+                        <div class="track-image" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                        {% endif %}
+                        <div class="track-info">
+                            <div class="track-name">{{ track.name }}</div>
+                            <div class="track-artist">🎤 {{ track.artist }}</div>
+                            <div class="track-genre">🎸 {{ track.genre }}</div>
+                            {% if track.audio %}
+                            <audio controls>
+                                <source src="{{ track.audio }}" type="audio/mpeg">
+                                Your browser does not support the audio element.
+                            </audio>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        let cameraStream = null;
+
+        function switchTab(tab) {
+            // Update buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update input methods
+            document.querySelectorAll('.input-method').forEach(method => method.classList.remove('active'));
+            document.getElementById(tab + '-input').classList.add('active');
+
+            // Start/stop camera
+            if (tab === 'camera') {
+                startCamera();
+            } else {
+                stopCamera();
+            }
+        }
+
+        function updateFileLabel(input) {
+            const label = document.getElementById('file-label-text');
+            if (input.files && input.files[0]) {
+                label.innerHTML = `✅ ${input.files[0].name}<br><small>Click to change</small>`;
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const video = document.getElementById('camera-preview');
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = cameraStream;
+                document.getElementById('camera-status').textContent = '✅ Camera active';
+            } catch (error) {
+                document.getElementById('camera-status').textContent = '❌ Camera access denied';
+                console.error('Camera error:', error);
+            }
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+        }
+
+        async function capturePhoto() {
+            const video = document.getElementById('camera-preview');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            const imageData = canvas.toDataURL('image/jpeg');
+            
+            // Show loading
+            document.getElementById('camera-status').innerHTML = '<div class="loading">Processing</div>';
+            
+            // Send to server
+            try {
+                const formData = new FormData();
+                formData.append('input_type', 'camera');
+                formData.append('image_data', imageData);
+                
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Reload page with results
+                    window.location.reload();
+                } else {
+                    document.getElementById('camera-status').textContent = '❌ ' + (data.error || 'Processing failed');
+                }
+            } catch (error) {
+                document.getElementById('camera-status').textContent = '❌ Error: ' + error.message;
+            }
+        }
+
+        async function changeEmotion(emotion) {
+            // Update button selection
+            document.querySelectorAll('.emotion-btn').forEach(btn => btn.classList.remove('selected'));
+            event.target.classList.add('selected');
+
+            // Show loading
+            const tracksContainer = document.getElementById('tracks-container');
+            if (tracksContainer) {
+                tracksContainer.innerHTML = '<div class="loading">Loading new songs</div>';
+            }
+
+            try {
+                const response = await fetch('/change-emotion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ emotion: emotion })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update emotion display
+                    document.querySelector('.emotion-result h2').textContent = 'Selected Emotion: ' + data.emotion;
+                    
+                    // Update tracks
+                    let tracksHTML = '<h3>🎵 Recommended Songs</h3>';
+                    data.tracks.forEach(track => {
+                        tracksHTML += `
+                        <div class="track-card">
+                            ${track.image ? `<img src="${track.image}" alt="${track.name}" class="track-image">` : '<div class="track-image" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>'}
+                            <div class="track-info">
+                                <div class="track-name">${track.name}</div>
+                                <div class="track-artist">🎤 ${track.artist}</div>
+                                <div class="track-genre">🎸 ${track.genre}</div>
+                                ${track.audio ? `<audio controls><source src="${track.audio}" type="audio/mpeg">Your browser does not support the audio element.</audio>` : ''}
+                            </div>
+                        </div>`;
+                    });
+                    
+                    if (tracksContainer) {
+                        tracksContainer.innerHTML = tracksHTML;
+                    }
+                } else {
+                    if (tracksContainer) {
+                        tracksContainer.innerHTML = '<div class="error">Failed to load songs: ' + (data.error || 'Unknown error') + '</div>';
+                    }
+                }
+            } catch (error) {
+                if (tracksContainer) {
+                    tracksContainer.innerHTML = '<div class="error">Error: ' + error.message + '</div>';
+                }
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', stopCamera);
+    </script>
+</body>
+</html>
