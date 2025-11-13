@@ -141,7 +141,7 @@
             width: 100%;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
@@ -157,6 +157,11 @@
             border-radius: 10px;
             margin: 15px auto;
             display: block;
+            background: #000;
+        }
+
+        #camera-preview.hidden {
+            display: none;
         }
 
         .result-section {
@@ -329,6 +334,29 @@
             60%, 100% { content: '...'; }
         }
 
+        #camera-status {
+            text-align: center;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        #camera-status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        #camera-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        #camera-status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 1.8em;
@@ -388,9 +416,9 @@
 
                 <!-- Camera Capture -->
                 <div id="camera-input" class="input-method">
-                    <video id="camera-preview" autoplay></video>
-                    <button type="button" class="btn-primary" onclick="capturePhoto()">📸 Capture Photo</button>
-                    <div id="camera-status" style="text-align: center; margin-top: 10px; color: #666;"></div>
+                    <video id="camera-preview" autoplay playsinline></video>
+                    <button type="button" class="btn-primary" id="capture-btn" onclick="capturePhoto()">📸 Capture Photo</button>
+                    <div id="camera-status"></div>
                 </div>
 
                 <!-- URL Input -->
@@ -403,60 +431,62 @@
                 </div>
             </div>
 
-            {% if emotion %}
-            <div class="result-section">
-                <div class="emotion-result">
-                    <h2>Detected Emotion: {{ emotion }}</h2>
-                    {% if confidence %}
-                    <p class="confidence">Confidence: {{ confidence }}%</p>
-                    {% endif %}
-                </div>
-
-                {% if image_path %}
-                <img src="{{ url_for('static', filename=image_path) }}" alt="Uploaded Image" class="uploaded-image">
-                {% endif %}
-
-                <!-- Manual Emotion Selection -->
-                <div class="emotion-selector">
-                    <h3>Not quite right? Select the correct emotion:</h3>
-                    <div class="emotion-buttons">
-                        <button class="emotion-btn happy {% if emotion.lower() == 'happy' %}selected{% endif %}" onclick="changeEmotion('happy')">😊 Happy</button>
-                        <button class="emotion-btn sad {% if emotion.lower() == 'sad' %}selected{% endif %}" onclick="changeEmotion('sad')">😢 Sad</button>
-                        <button class="emotion-btn angry {% if emotion.lower() == 'angry' %}selected{% endif %}" onclick="changeEmotion('angry')">😠 Angry</button>
-                        <button class="emotion-btn surprise {% if emotion.lower() == 'surprise' %}selected{% endif %}" onclick="changeEmotion('surprise')">😲 Surprise</button>
-                        <button class="emotion-btn fear {% if emotion.lower() == 'fear' %}selected{% endif %}" onclick="changeEmotion('fear')">😨 Fear</button>
-                        <button class="emotion-btn disgust {% if emotion.lower() == 'disgust' %}selected{% endif %}" onclick="changeEmotion('disgust')">🤢 Disgust</button>
-                        <button class="emotion-btn neutral {% if emotion.lower() == 'neutral' %}selected{% endif %}" onclick="changeEmotion('neutral')">😐 Neutral</button>
-                    </div>
-                </div>
-
-                {% if tracks %}
-                <div class="tracks-section" id="tracks-container">
-                    <h3>🎵 Recommended Songs</h3>
-                    {% for track in tracks %}
-                    <div class="track-card">
-                        {% if track.image %}
-                        <img src="{{ track.image }}" alt="{{ track.name }}" class="track-image">
-                        {% else %}
-                        <div class="track-image" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+            <div id="results-area">
+                {% if emotion %}
+                <div class="result-section">
+                    <div class="emotion-result">
+                        <h2>Detected Emotion: {{ emotion }}</h2>
+                        {% if confidence %}
+                        <p class="confidence">Confidence: {{ confidence }}%</p>
                         {% endif %}
-                        <div class="track-info">
-                            <div class="track-name">{{ track.name }}</div>
-                            <div class="track-artist">🎤 {{ track.artist }}</div>
-                            <div class="track-genre">🎸 {{ track.genre }}</div>
-                            {% if track.audio %}
-                            <audio controls>
-                                <source src="{{ track.audio }}" type="audio/mpeg">
-                                Your browser does not support the audio element.
-                            </audio>
-                            {% endif %}
+                    </div>
+
+                    {% if image_path %}
+                    <img src="{{ url_for('static', filename=image_path) }}" alt="Uploaded Image" class="uploaded-image">
+                    {% endif %}
+
+                    <!-- Manual Emotion Selection -->
+                    <div class="emotion-selector">
+                        <h3>Not quite right? Select the correct emotion:</h3>
+                        <div class="emotion-buttons">
+                            <button class="emotion-btn happy {% if emotion.lower() == 'happy' %}selected{% endif %}" onclick="changeEmotion('happy')">😊 Happy</button>
+                            <button class="emotion-btn sad {% if emotion.lower() == 'sad' %}selected{% endif %}" onclick="changeEmotion('sad')">😢 Sad</button>
+                            <button class="emotion-btn angry {% if emotion.lower() == 'angry' %}selected{% endif %}" onclick="changeEmotion('angry')">😠 Angry</button>
+                            <button class="emotion-btn surprise {% if emotion.lower() == 'surprise' %}selected{% endif %}" onclick="changeEmotion('surprise')">😲 Surprise</button>
+                            <button class="emotion-btn fear {% if emotion.lower() == 'fear' %}selected{% endif %}" onclick="changeEmotion('fear')">😨 Fear</button>
+                            <button class="emotion-btn disgust {% if emotion.lower() == 'disgust' %}selected{% endif %}" onclick="changeEmotion('disgust')">🤢 Disgust</button>
+                            <button class="emotion-btn neutral {% if emotion.lower() == 'neutral' %}selected{% endif %}" onclick="changeEmotion('neutral')">😐 Neutral</button>
                         </div>
                     </div>
-                    {% endfor %}
+
+                    {% if tracks %}
+                    <div class="tracks-section" id="tracks-container">
+                        <h3>🎵 Recommended Songs</h3>
+                        {% for track in tracks %}
+                        <div class="track-card">
+                            {% if track.image %}
+                            <img src="{{ track.image }}" alt="{{ track.name }}" class="track-image">
+                            {% else %}
+                            <div class="track-image" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                            {% endif %}
+                            <div class="track-info">
+                                <div class="track-name">{{ track.name }}</div>
+                                <div class="track-artist">🎤 {{ track.artist }}</div>
+                                <div class="track-genre">🎸 {{ track.genre }}</div>
+                                {% if track.audio %}
+                                <audio controls>
+                                    <source src="{{ track.audio }}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
                 {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 
@@ -488,39 +518,91 @@
         }
 
         async function startCamera() {
+            const statusDiv = document.getElementById('camera-status');
+            const video = document.getElementById('camera-preview');
+            
             try {
-                const video = document.getElementById('camera-preview');
-                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                statusDiv.textContent = '📷 Starting camera...';
+                statusDiv.className = 'info';
+                
+                // Request camera access with specific constraints
+                const constraints = {
+                    video: {
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = cameraStream;
-                document.getElementById('camera-status').textContent = '✅ Camera active';
+                video.classList.remove('hidden');
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve();
+                    };
+                });
+                
+                statusDiv.textContent = '✅ Camera ready! Position your face and click capture';
+                statusDiv.className = 'success';
+                document.getElementById('capture-btn').disabled = false;
+                
             } catch (error) {
-                document.getElementById('camera-status').textContent = '❌ Camera access denied';
                 console.error('Camera error:', error);
+                statusDiv.textContent = '❌ Camera access denied. Please allow camera permissions.';
+                statusDiv.className = 'error';
+                video.classList.add('hidden');
+                document.getElementById('capture-btn').disabled = true;
             }
         }
 
         function stopCamera() {
+            const video = document.getElementById('camera-preview');
+            const statusDiv = document.getElementById('camera-status');
+            
             if (cameraStream) {
                 cameraStream.getTracks().forEach(track => track.stop());
                 cameraStream = null;
+                video.srcObject = null;
             }
+            
+            statusDiv.textContent = '';
+            statusDiv.className = '';
         }
 
         async function capturePhoto() {
             const video = document.getElementById('camera-preview');
+            const statusDiv = document.getElementById('camera-status');
+            const captureBtn = document.getElementById('capture-btn');
+            
+            // Check if video is ready
+            if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+                statusDiv.textContent = '⚠️ Please wait for camera to initialize';
+                statusDiv.className = 'error';
+                return;
+            }
+            
+            // Create canvas and capture image
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0);
             
-            const imageData = canvas.toDataURL('image/jpeg');
+            // Convert to base64
+            const imageData = canvas.toDataURL('image/jpeg', 0.9);
             
-            // Show loading
-            document.getElementById('camera-status').innerHTML = '<div class="loading">Processing</div>';
+            // Show loading state
+            captureBtn.disabled = true;
+            captureBtn.textContent = '⏳ Processing...';
+            statusDiv.innerHTML = '<div class="loading">Analyzing emotion</div>';
+            statusDiv.className = 'info';
             
-            // Send to server
             try {
+                // Send to server
                 const formData = new FormData();
                 formData.append('input_type', 'camera');
                 formData.append('image_data', imageData);
@@ -530,17 +612,90 @@
                     body: formData
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Reload page with results
-                    window.location.reload();
+                    // Stop camera
+                    stopCamera();
+                    
+                    // Display results
+                    displayResults(data);
+                    
+                    statusDiv.textContent = '✅ Analysis complete!';
+                    statusDiv.className = 'success';
+                    
                 } else {
-                    document.getElementById('camera-status').textContent = '❌ ' + (data.error || 'Processing failed');
+                    throw new Error(data.error || 'Processing failed');
                 }
+                
             } catch (error) {
-                document.getElementById('camera-status').textContent = '❌ Error: ' + error.message;
+                console.error('Capture error:', error);
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                statusDiv.className = 'error';
+                
+            } finally {
+                captureBtn.disabled = false;
+                captureBtn.textContent = '📸 Capture Photo';
             }
+        }
+
+        function displayResults(data) {
+            const resultsArea = document.getElementById('results-area');
+            
+            let tracksHTML = '';
+            if (data.tracks && data.tracks.length > 0) {
+                data.tracks.forEach(track => {
+                    tracksHTML += `
+                    <div class="track-card">
+                        ${track.image ? 
+                            `<img src="${track.image}" alt="${track.name}" class="track-image">` : 
+                            '<div class="track-image" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>'
+                        }
+                        <div class="track-info">
+                            <div class="track-name">${track.name}</div>
+                            <div class="track-artist">🎤 ${track.artist}</div>
+                            <div class="track-genre">🎸 ${track.genre}</div>
+                            ${track.audio ? 
+                                `<audio controls><source src="${track.audio}" type="audio/mpeg">Your browser does not support the audio element.</audio>` : 
+                                ''
+                            }
+                        </div>
+                    </div>`;
+                });
+            }
+            
+            resultsArea.innerHTML = `
+                <div class="result-section">
+                    <div class="emotion-result">
+                        <h2>Detected Emotion: ${data.emotion}</h2>
+                        <p class="confidence">Confidence: ${data.confidence}%</p>
+                    </div>
+
+                    <img src="/static/${data.image_path}" alt="Captured Image" class="uploaded-image">
+
+                    <div class="emotion-selector">
+                        <h3>Not quite right? Select the correct emotion:</h3>
+                        <div class="emotion-buttons">
+                            <button class="emotion-btn happy ${data.emotion.toLowerCase() === 'happy' ? 'selected' : ''}" onclick="changeEmotion('happy')">😊 Happy</button>
+                            <button class="emotion-btn sad ${data.emotion.toLowerCase() === 'sad' ? 'selected' : ''}" onclick="changeEmotion('sad')">😢 Sad</button>
+                            <button class="emotion-btn angry ${data.emotion.toLowerCase() === 'angry' ? 'selected' : ''}" onclick="changeEmotion('angry')">😠 Angry</button>
+                            <button class="emotion-btn surprise ${data.emotion.toLowerCase() === 'surprise' ? 'selected' : ''}" onclick="changeEmotion('surprise')">😲 Surprise</button>
+                            <button class="emotion-btn fear ${data.emotion.toLowerCase() === 'fear' ? 'selected' : ''}" onclick="changeEmotion('fear')">😨 Fear</button>
+                            <button class="emotion-btn disgust ${data.emotion.toLowerCase() === 'disgust' ? 'selected' : ''}" onclick="changeEmotion('disgust')">🤢 Disgust</button>
+                            <button class="emotion-btn neutral ${data.emotion.toLowerCase() === 'neutral' ? 'selected' : ''}" onclick="changeEmotion('neutral')">😐 Neutral</button>
+                        </div>
+                    </div>
+
+                    <div class="tracks-section" id="tracks-container">
+                        <h3>🎵 Recommended Songs</h3>
+                        ${tracksHTML}
+                    </div>
+                </div>
+            `;
         }
 
         async function changeEmotion(emotion) {

@@ -1,53 +1,72 @@
 import os
+import shutil
+import tempfile
+import base64
+from io import BytesIO
+
 from flask import Flask, render_template, request, jsonify
 import requests
+from flask_cors import CORS
 import cv2
-import base64
-import tempfile
-import shutil
 import numpy as np
-
-# Import DeepFace
-try:
-    from deepface import DeepFace
-    print("✅ DeepFace loaded successfully!")
-except ImportError as e:
-    print(f"❌ DeepFace not available: {e}")
-    print("\n📝 INSTALLATION INSTRUCTIONS:")
-    print("   1. Make sure you're using Python 3.11 or lower")
-    print("   2. Create a virtual environment: py -3.11 -m venv venv")
-    print("   3. Activate it: venv\\Scripts\\activate")
-    print("   4. Install: pip install tensorflow==2.15.0 deepface==0.0.92")
-    raise ImportError("DeepFace is required. Please follow the installation instructions above.")
 
 # -------------------- Flask setup --------------------
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# -------------------- Emotion Labels --------------------
+# Enable CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:8080", "http://127.0.0.1:8080"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"],
+        "supports_credentials": True
+    }
+})
+
+# Try optional imports
+DEEPFACE_AVAILABLE = False
+MODEL_AVAILABLE = False
+model = None
+
+try:
+    from deepface import DeepFace
+    DEEPFACE_AVAILABLE = True
+    print("✅ DeepFace loaded successfully")
+except Exception as e:
+    print(f"⚠️ DeepFace not available: {e}")
+    DEEPFACE_AVAILABLE = False
+
+# Try to import TensorFlow/Keras model if available and model file exists
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import load_model
+    MODEL_PATH = os.path.join(os.path.dirname(__file__), 'fer2013_vgg16.h5')
+    if os.path.exists(MODEL_PATH):
+        try:
+            model = load_model(MODEL_PATH)
+            MODEL_AVAILABLE = True
+            print("✅ Keras model loaded from", MODEL_PATH)
+        except Exception as e:
+            print(f"⚠️ Failed loading Keras model: {e}")
+            MODEL_AVAILABLE = False
+    else:
+        print("ℹ️ No Keras model file found at", MODEL_PATH)
+        MODEL_AVAILABLE = False
+except Exception as e:
+    print(f"⚠️ TensorFlow/Keras not available: {e}")
+    MODEL_AVAILABLE = False
+
+# -------------------- Emotion labels --------------------
 emotion_labels = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
 
 # -------------------- API Credentials --------------------
 JAMENDO_CLIENT_ID = "0ecfada7"
 
-# -------------------- DeepFace Emotion Mapping --------------------
-def map_deepface_emotion(deepface_emotion):
-    """Map DeepFace emotions to our emotion labels"""
-    emotion_map = {
-        'angry': 'angry',
-        'disgust': 'disgust',
-        'fear': 'fear',
-        'happy': 'happy',
-        'sad': 'sad',
-        'surprise': 'surprise',
-        'neutral': 'neutral'
-    }
-    return emotion_map.get(deepface_emotion.lower(), 'neutral')
-
-# -------------------- Jamendo API --------------------
+# -------------------- Jamendo helper --------------------
 def get_jamendo_tracks(emotion, limit=5):
-    """Fetch songs from Jamendo based on emotion with proper audio URLs"""
     emotion_search_map = {
         "happy": "happy",
         "sad": "sad",
@@ -59,7 +78,6 @@ def get_jamendo_tracks(emotion, limit=5):
     }
 
     search_term = emotion_search_map.get(emotion.lower(), 'pop')
-    
     url = "https://api.jamendo.com/v3.0/tracks/"
     params = {
         'client_id': JAMENDO_CLIENT_ID,
@@ -71,485 +89,259 @@ def get_jamendo_tracks(emotion, limit=5):
         'order': 'popularity_week'
     }
 
-    print(f"\n🔍 Jamendo: searching for emotion '{emotion}' (tag: {search_term})")
     try:
-        response = requests.get(url, params=params, timeout=15)
-        print(f"🔍 Jamendo: status {response.status_code}")
-        
-        if response.status_code != 200:
-            print(f"❌ Jamendo API Error: Status {response.status_code}")
+        resp = requests.get(url, params=params, timeout=10)
+        if resp.status_code != 200:
             return []
-        
-        data = response.json()
-        
-        if 'error' in data:
-            print(f"❌ Jamendo API returned error: {data['error']}")
-            return []
-        
+        data = resp.json()
         results = data.get('results', [])
-        print(f"🔍 Jamendo: found {len(results)} tracks")
-        
-        if not results:
-            print("🔄 Jamendo: Trying fallback with popular tracks...")
-            params_fallback = {
-                'client_id': JAMENDO_CLIENT_ID,
-                'format': 'json',
-                'limit': limit * 2,
-                'audioformat': 'mp32',
-                'order': 'popularity_total'
-            }
-            response = requests.get(url, params=params_fallback, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get('results', [])
-                print(f"✅ Jamendo fallback: {len(results)} tracks")
-        
         tracks = []
-        for track in results:
-            audio_url = track.get('audio', '')
-            
-            if not audio_url:
+        for t in results:
+            audio = t.get('audio') or ''
+            if not audio:
                 continue
-                
-            musicinfo = track.get('musicinfo', {})
+            musicinfo = t.get('musicinfo', {})
             tags = musicinfo.get('tags', {})
             genres = tags.get('genres', []) if isinstance(tags, dict) else []
-            genre_str = ', '.join(genres[:3]) if genres else 'Various'
-            
-            track_info = {
-                'name': track.get('name', 'Unknown'),
-                'artist': track.get('artist_name', 'Unknown Artist'),
-                'audio': audio_url,
-                'image': track.get('album_image', ''),
-                'genre': genre_str,
+            tracks.append({
+                'name': t.get('name', 'Unknown'),
+                'artist': t.get('artist_name', 'Unknown'),
+                'audio': audio,
+                'image': t.get('album_image', ''),
+                'genre': ', '.join(genres[:3]) if genres else 'Various',
                 'source': 'jamendo'
-            }
-            tracks.append(track_info)
-            print(f"  ✅ Found track: {track_info['name']} by {track_info['artist']}")
-            
+            })
             if len(tracks) >= limit:
                 break
-        
-        print(f"🔢 Collected {len(tracks)} Jamendo tracks")
         return tracks
-    
-    except requests.exceptions.Timeout:
-        print("❌ Jamendo API request timed out")
-        return []
     except Exception as e:
-        print(f"❌ Jamendo error: {e}")
-        import traceback
-        traceback.print_exc()
+        print("Jamendo error:", e)
         return []
 
-# -------------------- Image Processing --------------------
+# -------------------- Image helpers --------------------
 def download_image_from_url(image_url):
-    """Download image from URL and save temporarily"""
     try:
-        print(f"📥 Downloading image from: {image_url}")
-        response = requests.get(image_url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-        response.raise_for_status()
-        
-        # Create temp file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-        temp_file.write(response.content)
-        temp_file.close()
-        
-        print(f"✅ Image downloaded to: {temp_file.name}")
-        return temp_file.name
+        resp = requests.get(image_url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        resp.raise_for_status()
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+        tmp.write(resp.content)
+        tmp.close()
+        return tmp.name
     except Exception as e:
-        print(f"❌ Error downloading image: {e}")
-        raise ValueError(f"Could not download image from URL: {str(e)}")
+        raise ValueError(f"Could not download image: {e}")
+
 
 def process_base64_image(base64_string):
-    """Process base64 image from camera and save temporarily"""
-    try:
-        # Remove data URL prefix if present
-        if ',' in base64_string:
-            base64_string = base64_string.split(',')[1]
-        
-        # Decode base64
-        img_data = base64.b64decode(base64_string)
-        
-        # Create temp file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-        temp_file.write(img_data)
-        temp_file.close()
-        
-        print(f"✅ Camera image saved to: {temp_file.name}")
-        return temp_file.name
-    except Exception as e:
-        print(f"❌ Error processing camera image: {e}")
-        raise ValueError(f"Could not process camera image: {str(e)}")
+    if ',' in base64_string:
+        base64_string = base64_string.split(',')[1]
+    data = base64.b64decode(base64_string)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+    tmp.write(data)
+    tmp.close()
+    return tmp.name
 
-def enhance_image_for_emotion(img_path):
-    """
-    Enhanced image preprocessing for better emotion detection
-    Especially helps with sad and disgust emotions
-    """
+# -------------------- Detection methods --------------------
+def detect_with_model(img_path):
+    """Use Keras model if available"""
     try:
-        # Read image
         img = cv2.imread(img_path)
         if img is None:
-            return img_path
-        
-        # Convert to grayscale for face detection
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Detect face
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
-        
-        if len(faces) > 0:
-            # Get the largest face
-            (x, y, w, h) = max(faces, key=lambda f: f[2] * f[3])
-            
-            # Add padding around face for context
-            padding = int(0.2 * max(w, h))
-            x = max(0, x - padding)
-            y = max(0, y - padding)
-            w = min(img.shape[1] - x, w + 2 * padding)
-            h = min(img.shape[0] - y, h + 2 * padding)
-            
-            # Crop to face region
-            face_img = img[y:y+h, x:x+w]
-        else:
-            face_img = img
-        
-        # Apply CLAHE for better contrast (helps with subtle expressions)
-        lab = cv2.cvtColor(face_img, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        l = clahe.apply(l)
-        enhanced = cv2.merge([l, a, b])
-        enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
-        
-        # Slight sharpening to enhance facial features
-        kernel = np.array([[-1,-1,-1],
-                          [-1, 9,-1],
-                          [-1,-1,-1]])
-        sharpened = cv2.filter2D(enhanced, -1, kernel)
-        
-        # Blend original and sharpened (70% sharpened, 30% enhanced)
-        final = cv2.addWeighted(sharpened, 0.7, enhanced, 0.3, 0)
-        
-        # Save enhanced image
-        enhanced_path = img_path.replace('.jpg', '_enhanced.jpg')
-        cv2.imwrite(enhanced_path, final)
-        
-        print(f"✅ Image enhanced and saved to: {enhanced_path}")
-        return enhanced_path
-        
+            raise ValueError('Could not read image')
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.resize(img, (96, 96))
+        img = img / 255.0
+        arr = np.expand_dims(img, 0)
+        preds = model.predict(arr, verbose=0)
+        idx = int(np.argmax(preds))
+        emotion = emotion_labels[idx]
+        confidence = float(np.max(preds)) * 100
+        return emotion, confidence, {emotion: round(confidence, 2)}
     except Exception as e:
-        print(f"⚠️ Image enhancement failed: {e}")
-        return img_path
-
-# -------------------- Enhanced DeepFace Emotion Detection --------------------
-def detect_emotion_deepface(img_path):
-    """
-    Enhanced emotion detection using DeepFace with improved accuracy for sad and disgust
-    Returns: (emotion, confidence, all_emotions, enhanced_path)
-    """
-    
-    print("\n" + "="*60)
-    print("🔬 ENHANCED DEEPFACE EMOTION DETECTION")
-    print("="*60)
-    
-    try:
-        # First, enhance the image
-        enhanced_path = enhance_image_for_emotion(img_path)
-        
-        # Try multiple DeepFace backends for better accuracy
-        backends = ['retinaface', 'mtcnn', 'ssd', 'opencv']
-        deepface_result = None
-        backend_used = None
-        
-        for backend in backends:
-            try:
-                print(f"🔍 Trying DeepFace with {backend} backend...")
-                result = DeepFace.analyze(
-                    enhanced_path, 
-                    actions=['emotion'],
-                    enforce_detection=False,
-                    detector_backend=backend,
-                    silent=True
-                )
-                deepface_result = result
-                backend_used = backend
-                print(f"✅ Successfully analyzed with {backend}")
-                break
-            except Exception as e:
-                print(f"⚠️ {backend} failed: {str(e)[:50]}")
-                continue
-        
-        if deepface_result is None:
-            raise RuntimeError("All DeepFace backends failed to process the image")
-        
-        # Handle both single result and list of results
-        if isinstance(deepface_result, list):
-            deepface_result = deepface_result[0]
-        
-        emotions = deepface_result.get('emotion', {})
-        
-        if not emotions:
-            raise RuntimeError("No emotions detected by DeepFace")
-        
-        # Enhanced emotion selection logic for sad and disgust
-        sorted_emotions = sorted(emotions.items(), key=lambda x: x[1], reverse=True)
-        top_emotion = sorted_emotions[0][0]
-        top_confidence = sorted_emotions[0][1]
-        
-        # Special handling for problematic emotions
-        if len(sorted_emotions) > 1:
-            second_emotion = sorted_emotions[1][0]
-            second_confidence = sorted_emotions[1][1]
-            
-            # If sad or disgust is in top 2 with reasonable confidence, consider it
-            confidence_gap = top_confidence - second_confidence
-            
-            # If confidence gap is small and second emotion is sad/disgust, choose it
-            if confidence_gap < 15 and second_emotion.lower() in ['sad', 'disgust']:
-                if second_confidence > 15:  # Minimum threshold
-                    print(f"🔄 Adjusting: {second_emotion} ({second_confidence:.2f}%) selected over {top_emotion} ({top_confidence:.2f}%)")
-                    top_emotion = second_emotion
-                    top_confidence = second_confidence
-        
-        dominant_emotion = top_emotion.lower()
-        mapped_emotion = map_deepface_emotion(dominant_emotion)
-        confidence = top_confidence
-        
-        print(f"\n📊 DeepFace All Emotions:")
-        for emotion, conf in sorted_emotions:
-            marker = "🏆" if emotion.lower() == dominant_emotion else "  "
-            print(f"{marker} {emotion}: {conf:.2f}%")
-        
-        print(f"\n🎯 Final Detected Emotion: {mapped_emotion.upper()} ({confidence:.2f}%)")
-        print(f"🔧 Backend Used: {backend_used}")
-        print("="*60 + "\n")
-        
-        return mapped_emotion, confidence, emotions, enhanced_path
-        
-    except Exception as e:
-        print(f"\n❌ DeepFace detection failed: {e}")
-        import traceback
-        traceback.print_exc()
-        print("="*60 + "\n")
+        print('Model detection failed:', e)
         raise
 
-# -------------------- Flask Routes --------------------
+
+def detect_with_deepface(img_path):
+    """Use DeepFace if available"""
+    try:
+        result = DeepFace.analyze(img_path, actions=['emotion'], enforce_detection=False, detector_backend='opencv')
+        if isinstance(result, list):
+            result = result[0]
+        emotions = result.get('emotion', {})
+        if not emotions:
+            raise RuntimeError('No emotions returned by DeepFace')
+        # Select dominant
+        dominant = max(emotions.items(), key=lambda x: x[1])[0]
+        mapped = dominant.lower()
+        mapped = mapped if mapped in emotion_labels else 'neutral'
+        confidence = emotions.get(dominant, 0)
+        return mapped, confidence, emotions
+    except Exception as e:
+        print('DeepFace detection failed:', e)
+        raise
+
+
+def detect_fallback_cv(img_path):
+    """Simple fallback: smile detection -> happy, otherwise neutral"""
+    try:
+        img = cv2.imread(img_path)
+        if img is None:
+            raise ValueError('Could not read image')
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+        if len(faces) == 0:
+            return 'neutral', 50.0, {}
+        # try smile cascade on the first face
+        (x, y, w, h) = faces[0]
+        roi = gray[y:y+h, x:x+w]
+        smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_smile.xml')
+        smiles = smile_cascade.detectMultiScale(roi, scaleFactor=1.7, minNeighbors=20)
+        if len(smiles) > 0:
+            return 'happy', 75.0, {'happy': 75.0}
+        else:
+            return 'neutral', 60.0, {'neutral': 60.0}
+    except Exception as e:
+        print('Fallback CV failed:', e)
+        return 'neutral', 50.0, {}
+
+
+def detect_emotion(img_path):
+    """Unified detection that picks the best available method."""
+    # Prefer model, then DeepFace, then fallback
+    if MODEL_AVAILABLE and model is not None:
+        try:
+            return detect_with_model(img_path)
+        except Exception:
+            pass
+    if DEEPFACE_AVAILABLE:
+        try:
+            return detect_with_deepface(img_path)
+        except Exception:
+            pass
+    return detect_fallback_cv(img_path)
+
+# -------------------- Flask routes --------------------
 @app.route('/')
 def home():
     return render_template('index.html', emotion=None, tracks=None, confidence=None)
 
-@app.route('/predict', methods=['POST'])
+
+@app.route('/predict', methods=['POST', 'OPTIONS'])
 def predict():
-    temp_filepath = None
-    enhanced_filepath = None
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response, 200
     
+    temp_filepath = None
     try:
-        # Check input type: file upload, URL, or camera
+        # Determine input type from form data
         input_type = request.form.get('input_type', 'file')
         
         if input_type == 'url':
-            # Handle URL input
             image_url = request.form.get('image_url', '').strip()
             if not image_url:
-                return render_template('index.html', emotion=None, tracks=None, confidence=None,
-                                     error="Please enter an image URL")
-            
+                return jsonify({'error': 'Please provide an image URL'}), 400
             temp_filepath = download_image_from_url(image_url)
             filepath = temp_filepath
-            filename = "url_image.jpg"
-            
+            filename = 'url_image.jpg'
         elif input_type == 'camera':
-            # Handle camera capture
             image_data = request.form.get('image_data')
             if not image_data:
-                return jsonify({'error': 'No camera image data received'}), 400
-            
+                return jsonify({'error': 'No camera data received'}), 400
             temp_filepath = process_base64_image(image_data)
             filepath = temp_filepath
-            filename = "camera_capture.jpg"
-            
+            filename = 'camera_capture.jpg'
         else:
-            # Handle file upload
+            # File upload
             if 'file' not in request.files:
-                return render_template('index.html', emotion=None, tracks=None, confidence=None, 
-                                     error="No file uploaded")
-
+                return jsonify({'error': 'No file uploaded'}), 400
             file = request.files['file']
             if file.filename == '':
-                return render_template('index.html', emotion=None, tracks=None, confidence=None,
-                                     error="No file selected")
-
-            allowed_extensions = {'png', 'jpg', 'jpeg'}
+                return jsonify({'error': 'No file selected'}), 400
+            allowed = {'png', 'jpg', 'jpeg'}
             ext = file.filename.rsplit('.', 1)[-1].lower()
-            if ext not in allowed_extensions:
-                return render_template('index.html', emotion=None, tracks=None, confidence=None,
-                                     error="Invalid file type. Please upload PNG, JPG, or JPEG")
-
+            if ext not in allowed:
+                return jsonify({'error': 'Invalid file type'}), 400
             filename = file.filename
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
 
-        # Detect emotion using Enhanced DeepFace
-        emotion, confidence, all_emotions, enhanced_filepath = detect_emotion_deepface(filepath)
-        
-        print("\n" + "🎯"*30)
-        print(f"✅ FINAL RESULT: {emotion.upper()} (confidence: {confidence:.2f}%)")
-        print("🎯"*30 + "\n")
-
-        # Fetch tracks based on detected emotion
+        emotion, confidence, all_emotions = detect_emotion(filepath)
         jamendo_tracks = get_jamendo_tracks(emotion, limit=5)
-        print(f"\n✅ Retrieved {len(jamendo_tracks)} Jamendo tracks")
 
-        # Save image to static folder for display
+        # If temp file exists (from url or camera), copy to uploads for display
         if temp_filepath:
-            display_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            shutil.copy(temp_filepath, display_path)
-        elif not temp_filepath:
-            # File was uploaded directly
-            display_path = filepath
-        
-        image_path = f"uploads/{filename}"
-        
-        # Prepare emotion info with all emotions for manual selection
-        emotion_info = {
-            'all_emotions': {k: round(v, 2) for k, v in all_emotions.items()},
-            'model_used': 'DeepFace (Enhanced)',
-            'detected_emotion': emotion.capitalize()
-        }
-        
-        # Clean up temp files
-        if temp_filepath and os.path.exists(temp_filepath):
+            dest = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             try:
-                os.unlink(temp_filepath)
-            except:
-                pass
-        if enhanced_filepath and os.path.exists(enhanced_filepath):
-            try:
-                os.unlink(enhanced_filepath)
-            except:
-                pass
-        
-        # Return JSON for camera capture, HTML for others
-        if input_type == 'camera':
-            return jsonify({
-                'success': True,
-                'emotion': emotion.capitalize(),
-                'confidence': round(confidence, 2),
-                'tracks': jamendo_tracks,
-                'emotion_info': emotion_info,
-                'image_path': image_path
-            })
-        
-        return render_template('index.html',
-                             emotion=emotion.capitalize(),
-                             tracks=jamendo_tracks,
-                             confidence=round(confidence, 2),
-                             image_path=image_path,
-                             emotion_info=emotion_info)
-                             
-    except Exception as e:
-        import traceback
-        print(f"\n❌ ERROR in predict route: {e}")
-        traceback.print_exc()
-        
-        # Clean up temp files on error
-        if temp_filepath and os.path.exists(temp_filepath):
-            try:
-                os.unlink(temp_filepath)
-            except:
-                pass
-        if enhanced_filepath and os.path.exists(enhanced_filepath):
-            try:
-                os.unlink(enhanced_filepath)
-            except:
-                pass
-        
-        if request.form.get('input_type') == 'camera':
-            return jsonify({'error': f"Error processing image: {str(e)}"}), 500
-        
-        return render_template('index.html', emotion=None, tracks=None, confidence=None, 
-                             error=f"Error processing image: {str(e)}")
+                shutil.copy(temp_filepath, dest)
+                image_path = f'uploads/{filename}'
+            except Exception:
+                image_path = None
+        else:
+            image_path = f'uploads/{filename}'
 
-@app.route('/change-emotion', methods=['POST'])
-def change_emotion():
-    """Allow user to manually change the detected emotion and get new songs"""
-    try:
-        data = request.get_json()
-        new_emotion = data.get('emotion', '').lower()
-        
-        if new_emotion not in emotion_labels:
-            return jsonify({'error': 'Invalid emotion'}), 400
-        
-        print(f"\n🔄 User changed emotion to: {new_emotion.upper()}")
-        
-        # Fetch new tracks based on selected emotion
-        jamendo_tracks = get_jamendo_tracks(new_emotion, limit=5)
-        
+        # Always return JSON for API requests
         return jsonify({
             'success': True,
-            'emotion': new_emotion.capitalize(),
-            'tracks': jamendo_tracks
+            'emotion': emotion.capitalize(),
+            'confidence': round(confidence, 2),
+            'tracks': jamendo_tracks,
+            'image_path': image_path,
+            'all_emotions': all_emotions if all_emotions else None
         })
-        
-    except Exception as e:
-        print(f"❌ Error changing emotion: {e}")
-        return jsonify({'error': str(e)}), 500
 
-# -------------------- Test Functions --------------------
-def test_jamendo():
-    """Test Jamendo connection"""
-    print("\n" + "="*60)
-    print("🧪 TESTING JAMENDO API CONNECTION")
-    print("="*60)
-    
-    url = "https://api.jamendo.com/v3.0/tracks/"
-    params = {
-        'client_id': JAMENDO_CLIENT_ID,
-        'format': 'json',
-        'limit': 1,
-        'audioformat': 'mp32'
-    }
+    except Exception as e:
+        print('Predict error:', e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'success': False}), 500
+    finally:
+        if temp_filepath and os.path.exists(temp_filepath):
+            try:
+                os.unlink(temp_filepath)
+            except Exception:
+                pass
+
+
+@app.route('/change-emotion', methods=['POST', 'OPTIONS'])
+def change_emotion():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response, 200
     
     try:
-        response = requests.get(url, params=params, timeout=10)
-        print(f"Status Code: {response.status_code}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('results'):
-                track = data['results'][0]
-                print("✅ JAMENDO API CONNECTION SUCCESSFUL!")
-                print(f"   Test track: {track.get('name')} by {track.get('artist_name')}")
-                print(f"   Audio URL: {track.get('audio', 'N/A')}")
-            else:
-                print("⚠️ API responded but returned no tracks")
-        else:
-            print(f"❌ API CONNECTION FAILED")
-            print(f"   Response: {response.text[:200]}")
+        data = request.get_json() or {}
+        new_emotion = data.get('emotion', '').lower()
+        if new_emotion not in emotion_labels:
+            return jsonify({'error': 'Invalid emotion'}), 400
+        tracks = get_jamendo_tracks(new_emotion, limit=5)
+        return jsonify({'success': True, 'emotion': new_emotion.capitalize(), 'tracks': tracks})
     except Exception as e:
-        print(f"❌ CONNECTION ERROR: {e}")
-    
-    print("="*60 + "\n")
+        print('Change emotion error:', e)
+        return jsonify({'error': str(e)}), 500
 
-# -------------------- Run Flask App --------------------
+
+# -------------------- Test helper --------------------
+def test_jamendo():
+    try:
+        t = get_jamendo_tracks('happy', limit=1)
+        print('Jamendo test tracks:', len(t))
+    except Exception as e:
+        print('Jamendo test failed:', e)
+
+
 if __name__ == '__main__':
-    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-    print("\n" + "🎵" * 30)
-    print("🎧 EMOTION-BASED MUSIC RECOMMENDER (Enhanced DeepFace)")
-    print("   ✅ Improved accuracy for sad and disgust emotions")
-    print("   ✅ Manual emotion selection available")
-    print("🎵" * 30)
-    print(f"\nJamendo Client ID: {JAMENDO_CLIENT_ID}")
-    print("📷 Features: File Upload | Camera Capture | URL Input | Manual Override")
-
+    print('\nStarting EmoTune server (robust mode)')
+    print('DEEPFACE_AVAILABLE =', DEEPFACE_AVAILABLE)
+    print('MODEL_AVAILABLE =', MODEL_AVAILABLE)
     test_jamendo()
-
-    print("🚀 Starting Flask server...")
-    print("📍 Open http://localhost:5000 in your browser")
-    print("📝 Using Enhanced DeepFace with manual emotion selection\n")
-
     app.run(debug=True, host='0.0.0.0', port=5000)
