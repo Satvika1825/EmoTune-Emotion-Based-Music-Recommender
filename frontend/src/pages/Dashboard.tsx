@@ -4,9 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Camera, Upload, Link as LinkIcon, Play, Pause, Heart, 
-  SkipBack, SkipForward, Search, Volume2, Loader2
+  Camera, Upload, Link2, Play, Pause, Heart, 
+  SkipBack, SkipForward, Search, Volume2, Loader2,
+  LogOut, Shuffle, SlidersHorizontal, Share2, X
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const BACKEND_URL = "http://localhost:5000";
 
@@ -43,6 +57,8 @@ const Dashboard = () => {
   const [cameraActive, setCameraActive] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [detectedImageUrl, setDetectedImageUrl] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState("default");
+  const [filterBy, setFilterBy] = useState("all");
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -83,6 +99,57 @@ const Dashboard = () => {
       audio.removeEventListener('ended', handleEnded);
     };
   }, [currentSong]);
+
+  const handleSignOut = () => {
+    // Reset all state
+    setCurrentEmotion("happy");
+    setConfidence(0);
+    setSongs([]);
+    setCurrentSong(null);
+    setIsPlaying(false);
+    setDetectedImageUrl(null);
+    setShowDetection(true);
+    
+    toast({
+      title: "Signed out successfully",
+      description: "See you next time!",
+    });
+  };
+
+  const shuffleSongs = () => {
+    const shuffled = [...songs].sort(() => Math.random() - 0.5);
+    setSongs(shuffled);
+    toast({
+      title: "Playlist shuffled",
+      description: "Songs are now in random order",
+    });
+  };
+
+  const shareSong = (song: Song) => {
+    const shareText = `Check out "${song.name}" by ${song.artist} on EmoTune!`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: song.name,
+        text: shareText,
+        url: window.location.href,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareText);
+      toast({
+        title: "Copied to clipboard!",
+        description: "Share this song with your friends",
+      });
+    }
+  };
+
+  const skipCurrentSong = () => {
+    if (currentSong) {
+      const currentIndex = songs.findIndex(s => s.name === currentSong.name);
+      const nextIndex = (currentIndex + 1) % songs.length;
+      playSong(songs[nextIndex]);
+    }
+  };
 
   const startCamera = async () => {
     try {
@@ -197,7 +264,6 @@ const Dashboard = () => {
         setConfidence(data.confidence);
         setSongs(data.tracks);
         
-        // Create preview URL for uploaded image
         const reader = new FileReader();
         reader.onload = (e) => {
           setDetectedImageUrl(e.target?.result as string);
@@ -331,11 +397,28 @@ const Dashboard = () => {
     setIsPlaying(!isPlaying);
   };
 
-  const filteredSongs = songs.filter(song => {
-    const matchesSearch = song.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         song.artist.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const getSortedAndFilteredSongs = () => {
+    let filtered = songs.filter(song => {
+      const matchesSearch = song.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           song.artist.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      if (filterBy === "favorites") {
+        return matchesSearch && favorites.includes(songs.indexOf(song));
+      }
+      
+      return matchesSearch;
+    });
+
+    if (sortBy === "name") {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "artist") {
+      filtered.sort((a, b) => a.artist.localeCompare(b.artist));
+    }
+
+    return filtered;
+  };
+
+  const filteredSongs = getSortedAndFilteredSongs();
 
   const emotionColors = {
     happy: "from-yellow-400 via-orange-400 to-yellow-500",
@@ -410,7 +493,7 @@ const Dashboard = () => {
               🎵
             </motion.div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent">
-              MoodTune
+              EmoTune
             </h1>
           </div>
           
@@ -424,272 +507,334 @@ const Dashboard = () => {
               <Camera className="w-4 h-4" />
               Detect Mood
             </Button>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              className="gap-2 text-red-400 hover:text-red-300"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </Button>
           </div>
         </div>
       </motion.nav>
 
       <div className="container mx-auto px-6 py-8 pb-32">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
-        >
-          <motion.div
-            animate={{
-              scale: [1, 1.1, 1],
-              rotate: [0, 5, -5, 0],
-            }}
-            transition={{
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="text-8xl mb-4 inline-block"
-          >
-            {emotionEmojis[currentEmotion as keyof typeof emotionEmojis]}
-          </motion.div>
-          <h2 className="text-4xl font-bold mb-2 capitalize">
-            Feeling {currentEmotion}
-          </h2>
-          <p className="text-muted-foreground text-lg">
-            Here's your personalized playlist
-          </p>
-          {confidence > 0 && (
-            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md bg-white/10 border border-white/20">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-sm">Confidence: {confidence}%</span>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Detected Image Display */}
-        {detectedImageUrl && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mb-8 flex justify-center"
-          >
-            <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-4 max-w-md">
-              <img
-                src={detectedImageUrl}
-                alt="Detected emotion"
-                className="w-full rounded-2xl shadow-2xl"
-              />
-            </div>
-          </motion.div>
-        )}
-
-        <AnimatePresence>
-          {showDetection && (
+        <div className="flex items-start gap-6">
+          {/* Main Content */}
+          <div className="flex-1">
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-8 overflow-hidden"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center mb-8"
             >
-              <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-6">
-                <h3 className="text-xl font-semibold mb-4">Detect Your Mood</h3>
+              <motion.div
+                animate={{
+                  scale: [1, 1.1, 1],
+                  rotate: [0, 5, -5, 0],
+                }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="text-6xl mb-3 inline-block"
+              >
+                {emotionEmojis[currentEmotion as keyof typeof emotionEmojis]}
+              </motion.div>
+              <h2 className="text-3xl font-bold mb-1 capitalize">
+                Feeling {currentEmotion}
+              </h2>
+              <p className="text-muted-foreground">
+                Your personalized playlist
+              </p>
+              {confidence > 0 && (
+                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full backdrop-blur-md bg-white/10 border border-white/20 text-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  Confidence: {confidence}%
+                </div>
+              )}
+            </motion.div>
+
+            {detectedImageUrl && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mb-6 flex justify-center"
+              >
+                <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-xl p-2 max-w-xs">
+                  <img
+                    src={detectedImageUrl}
+                    alt="Detected emotion"
+                    className="w-20 rounded-lg shadow-lg"
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            <AnimatePresence>
+              {showDetection && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-6 overflow-hidden"
+                >
+                  <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
+                    <h3 className="text-lg font-semibold mb-3">Detect Your Mood</h3>
+                    
+                    {cameraActive ? (
+                      <div className="space-y-3">
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          className="w-full max-w-md mx-auto rounded-lg"
+                        />
+                        <div className="flex gap-3 justify-center">
+                          <Button onClick={capturePhoto} disabled={isLoading} size="sm">
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                            Capture
+                          </Button>
+                          <Button onClick={stopCamera} variant="outline" size="sm">
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-3">
+                        <Button onClick={startCamera} size="sm" disabled={isLoading}>
+                          <Camera className="w-4 h-4 mr-2" />
+                          Webcam
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isLoading}
+                          onClick={() => document.getElementById('file-upload')?.click()}
+                        >
+                          {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                          Upload
+                        </Button>
+                        <input
+                          id="file-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        
+                        <div className="flex gap-2 flex-1 min-w-[200px]">
+                          <Input
+                            placeholder="Image URL..."
+                            value={imageUrl}
+                            onChange={(e) => setImageUrl(e.target.value)}
+                            className="backdrop-blur-md bg-white/10 border-white/20 h-9"
+                            disabled={isLoading}
+                          />
+                          <Button 
+                            variant="secondary" 
+                            onClick={handleUrlSubmit}
+                            disabled={isLoading}
+                            size="sm"
+                          >
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {songs.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-3 mb-6 flex items-center gap-3"
+              >
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search songs..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 backdrop-blur-md bg-white/10 border-white/20 h-9"
+                  />
+                </div>
                 
-                {cameraActive ? (
-                  <div className="space-y-4">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      className="w-full max-w-md mx-auto rounded-lg"
-                    />
-                    <div className="flex gap-4 justify-center">
-                      <Button onClick={capturePhoto} disabled={isLoading}>
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                        Capture Photo
-                      </Button>
-                      <Button onClick={stopCamera} variant="outline">
-                        Cancel
-                      </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={shuffleSongs}
+                  className="gap-2"
+                >
+                  <Shuffle className="w-4 h-4" />
+                  Shuffle
+                </Button>
+
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-32 h-9 backdrop-blur-md bg-white/10 border-white/20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="name">By Name</SelectItem>
+                    <SelectItem value="artist">By Artist</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterBy} onValueChange={setFilterBy}>
+                  <SelectTrigger className="w-32 h-9 backdrop-blur-md bg-white/10 border-white/20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Songs</SelectItem>
+                    <SelectItem value="favorites">Favorites</SelectItem>
+                  </SelectContent>
+                </Select>
+              </motion.div>
+            )}
+
+            {filteredSongs.length > 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
+              >
+                {filteredSongs.map((song, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ scale: 1.03, y: -3 }}
+                    className={`backdrop-blur-xl bg-white/10 border border-white/20 rounded-lg p-2 cursor-pointer transition-all hover:shadow-lg ${
+                      currentSong?.name === song.name ? emotionGlows[currentEmotion as keyof typeof emotionGlows] : ""
+                    }`}
+                  >
+                    <div className="relative mb-3 group">
+                      <img
+                        src={song.image || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400'}
+                        alt={song.name}
+                        className="w-full aspect-square object-cover rounded-lg"
+                      />
+                      
+                      {currentSong?.name === song.name && isPlaying ? (
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={skipCurrentSong}
+                          className="absolute top-2 right-2 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center shadow-lg"
+                        >
+                          <X className="w-5 h-5 text-white" />
+                        </motion.button>
+                      ) : (
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => playSong(song)}
+                          className="absolute inset-0 m-auto w-14 h-14 bg-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-xl"
+                        >
+                          <Play className="w-7 h-7 text-primary-foreground ml-1" fill="currentColor" />
+                        </motion.button>
+                      )}
+                      
+                      {currentSong?.name === song.name && isPlaying && (
+                        <div className="absolute bottom-2 left-2 right-2 flex items-end gap-1 h-6">
+                          {[...Array(10)].map((_, i) => (
+                            <motion.div
+                              key={i}
+                              className="flex-1 bg-white rounded-full"
+                              animate={{
+                                height: ["20%", "100%", "20%"],
+                              }}
+                              transition={{
+                                duration: 0.8,
+                                repeat: Infinity,
+                                delay: i * 0.1,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-4">
+
+                    <div className="space-y-1">
+                      <h3 className="font-semibold truncate text-xs">{song.name}</h3>
+                      <p className="text-xs text-muted-foreground truncate">{song.artist}</p>
+                      <p className="text-xs text-muted-foreground hidden sm:block">{song.genre}</p>
+                      
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-xs text-muted-foreground">{song.source}</span>
+                        <div className="flex gap-1">
+                          <motion.button
+                            whileHover={{ scale: 1.2 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => shareSong(song)}
+                            className="text-blue-400 p-1"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.2 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => toggleFavorite(index)}
+                            className="text-pink-500 p-1"
+                          >
+                            <Heart
+                              className="w-4 h-4"
+                              fill={favorites.includes(index) ? "currentColor" : "none"}
+                            />
+                          </motion.button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-lg text-muted-foreground">
+                  {songs.length === 0 
+                    ? "Detect your mood to get personalized music recommendations!"
+                    : "No songs found matching your search."}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Compact Mood Selector Sidebar */}
+          {songs.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="w-20 sticky top-24"
+            >
+              <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-3">
+                <h3 className="text-xs font-semibold mb-3 text-center">Mood</h3>
+                <div className="space-y-2">
+                  {Object.keys(emotionEmojis).map((emotion) => (
                     <Button
-                      onClick={startCamera}
-                      className="gap-2"
+                      key={emotion}
+                      onClick={() => changeEmotion(emotion)}
+                      variant={currentEmotion === emotion ? "default" : "ghost"}
+                      className="w-full h-auto py-2 flex flex-col gap-1"
                       disabled={isLoading}
+                      size="sm"
                     >
-                      <Camera className="w-4 h-4" />
-                      Use Webcam
+                      <span className="text-xl">{emotionEmojis[emotion as keyof typeof emotionEmojis]}</span>
                     </Button>
-                    
-                    <label>
-                      <Button
-                        variant="outline"
-                        className="gap-2"
-                        disabled={isLoading}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          document.getElementById('file-upload')?.click();
-                        }}
-                      >
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                        Upload Image
-                      </Button>
-                      <input
-                        id="file-upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-                    
-                    <div className="flex gap-2 flex-1 min-w-[200px]">
-                      <Input
-                        placeholder="Or paste image URL..."
-                        value={imageUrl}
-                        onChange={(e) => setImageUrl(e.target.value)}
-                        className="backdrop-blur-md bg-white/10 border-white/20"
-                        disabled={isLoading}
-                      />
-                      <Button 
-                        variant="secondary" 
-                        onClick={handleUrlSubmit}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LinkIcon className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             </motion.div>
           )}
-        </AnimatePresence>
-
-        {songs.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-3xl p-6 mb-8"
-          >
-            <h3 className="text-lg font-semibold mb-4 text-center">Change Your Mood</h3>
-            <div className="grid grid-cols-4 md:grid-cols-7 gap-3">
-              {Object.keys(emotionEmojis).map((emotion) => (
-                <Button
-                  key={emotion}
-                  onClick={() => changeEmotion(emotion)}
-                  variant={currentEmotion === emotion ? "default" : "outline"}
-                  className="flex flex-col gap-1 h-auto py-3"
-                  disabled={isLoading}
-                >
-                  <span className="text-2xl">{emotionEmojis[emotion as keyof typeof emotionEmojis]}</span>
-                  <span className="text-xs capitalize">{emotion}</span>
-                </Button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {songs.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4 mb-8"
-          >
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search songs..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 backdrop-blur-md bg-white/10 border-white/20"
-              />
-            </div>
-          </motion.div>
-        )}
-
-        {filteredSongs.length > 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-          >
-            {filteredSongs.map((song, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                whileHover={{ scale: 1.05, y: -5 }}
-                className={`backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4 cursor-pointer transition-all hover:shadow-2xl ${
-                  currentSong?.name === song.name ? emotionGlows[currentEmotion as keyof typeof emotionGlows] : ""
-                }`}
-              >
-                <div className="relative mb-4 group">
-                  <img
-                    src={song.image || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400'}
-                    alt={song.name}
-                    className="w-full aspect-square object-cover rounded-xl"
-                  />
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => playSong(song)}
-                    className="absolute inset-0 m-auto w-16 h-16 bg-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-xl"
-                  >
-                    <Play className="w-8 h-8 text-primary-foreground ml-1" fill="currentColor" />
-                  </motion.button>
-                  
-                  {currentSong?.name === song.name && isPlaying && (
-                    <div className="absolute bottom-2 left-2 right-2 flex items-end gap-1 h-8">
-                      {[...Array(12)].map((_, i) => (
-                        <motion.div
-                          key={i}
-                          className="flex-1 bg-white rounded-full"
-                          animate={{
-                            height: ["20%", "100%", "20%"],
-                          }}
-                          transition={{
-                            duration: 0.8,
-                            repeat: Infinity,
-                            delay: i * 0.1,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="font-semibold truncate">{song.name}</h3>
-                  <p className="text-sm text-muted-foreground truncate">{song.artist}</p>
-                  <p className="text-xs text-muted-foreground">{song.genre}</p>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">{song.source}</span>
-                    <motion.button
-                      whileHover={{ scale: 1.2 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => toggleFavorite(index)}
-                      className="text-pink-500"
-                    >
-                      <Heart
-                        className="w-5 h-5"
-                        fill={favorites.includes(index) ? "currentColor" : "none"}
-                      />
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        ) : (
-          <div className="text-center py-12">
-            <p className="text-lg text-muted-foreground">
-              {songs.length === 0 
-                ? "Detect your mood to get personalized music recommendations!"
-                : "No songs found matching your search."}
-            </p>
-          </div>
-        )}
+        </div>
       </div>
 
       <AnimatePresence>
@@ -732,7 +877,12 @@ const Dashboard = () => {
                         <Play className="w-5 h-5 ml-0.5" fill="currentColor" />
                       )}
                     </Button>
-                    <Button variant="ghost" size="icon" className="hover:bg-white/20">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="hover:bg-white/20"
+                      onClick={skipCurrentSong}
+                    >
                       <SkipForward className="w-5 h-5" />
                     </Button>
                   </div>
@@ -748,6 +898,14 @@ const Dashboard = () => {
                 </div>
 
                 <div className="flex items-center gap-2 flex-1 justify-end">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => currentSong && shareSong(currentSong)}
+                    className="hover:bg-white/20"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </Button>
                   <Volume2 className="w-4 h-4 text-muted-foreground" />
                   <div className="w-24 h-1.5 bg-white/20 rounded-full overflow-hidden">
                     <div className="h-full bg-white w-3/4" />
