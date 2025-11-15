@@ -43,6 +43,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Your Google OAuth Client ID from Google Cloud Console
@@ -330,8 +331,8 @@ const Login = () => {
                 </div>
 
                 {/* Google Sign-In Button */}
-                <div className="flex justify-center">
-                  <div id="googleSignInButton"></div>
+                <div className="flex justify-center items-center min-h-[44px]">
+                  <div id="googleSignInButton" className="w-full max-w-[350px]"></div>
                 </div>
 
                 <div className="mt-6 text-center">

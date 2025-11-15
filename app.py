@@ -38,6 +38,7 @@ def register():
         email = data.get("email", "").strip()
         password = data.get("password", "").strip()
         confirm_password = data.get("confirmPassword", "").strip()
+        username = data.get("username", "").strip()
 
         if not email:
             return jsonify({"error": "Email required"}), 400
@@ -52,15 +53,33 @@ def register():
             # Use Supabase Auth to create user
             auth_response = supabase.auth.sign_up({
                 "email": email,
-                "password": password
+                "password": password,
+                "options": {
+                    "data": {
+                        "username": username if username else email.split('@')[0]
+                    }
+                }
             })
             
             if auth_response.user:
+                # Create profile in profiles table
+                try:
+                    profile_data = {
+                        "id": auth_response.user.id,
+                        "email": auth_response.user.email,
+                        "username": username if username else email.split('@')[0]
+                    }
+                    supabase.table("profiles").insert(profile_data).execute()
+                except Exception as profile_err:
+                    print(f"Profile creation warning: {profile_err}")
+                    # Continue even if profile creation fails (might be created by trigger)
+                
                 return jsonify({
                     "message": "User registered successfully! Please check your email for verification.",
                     "user": {
                         "id": auth_response.user.id,
-                        "email": auth_response.user.email
+                        "email": auth_response.user.email,
+                        "username": username if username else email.split('@')[0]
                     },
                     "session": {
                         "access_token": auth_response.session.access_token if auth_response.session else None,
