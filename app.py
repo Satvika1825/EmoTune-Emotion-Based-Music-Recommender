@@ -5,6 +5,7 @@ import base64
 from io import BytesIO
 
 from flask import Flask, render_template, request, jsonify
+from supabase import create_client, Client
 import requests
 from flask_cors import CORS
 import cv2
@@ -19,12 +20,159 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Enable CORS
 CORS(app, resources={
     r"/*": {
-        "origins": ["http://localhost:8080", "http://127.0.0.1:8080"],
+        "origins": ["http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:5173", "http://127.0.0.1:5173"],
         "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"],
+        "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
     }
 })
+
+SUPABASE_URL = "https://bjbyohwqvpamwvnvlnrb.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqYnlvaHdxdnBhbXd2bnZsbnJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMDkxMjksImV4cCI6MjA3ODc4NTEyOX0.6bXWQkmmpdI5NZ7WGgvvKgjf-g0LIdyYgBc_FoZXUE0"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+@app.route("/register", methods=["POST"])
+def register():
+    try:
+        data = request.json or {}
+        email = data.get("email", "").strip()
+        password = data.get("password", "").strip()
+        confirm_password = data.get("confirmPassword", "").strip()
+
+        if not email:
+            return jsonify({"error": "Email required"}), 400
+        if not password:
+            return jsonify({"error": "Password required"}), 400
+        if password != confirm_password:
+            return jsonify({"error": "Passwords do not match"}), 400
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+        try:
+            # Use Supabase Auth to create user
+            auth_response = supabase.auth.sign_up({
+                "email": email,
+                "password": password
+            })
+            
+            if auth_response.user:
+                return jsonify({
+                    "message": "User registered successfully! Please check your email for verification.",
+                    "user": {
+                        "id": auth_response.user.id,
+                        "email": auth_response.user.email
+                    },
+                    "session": {
+                        "access_token": auth_response.session.access_token if auth_response.session else None,
+                        "refresh_token": auth_response.session.refresh_token if auth_response.session else None
+                    }
+                }), 200
+            else:
+                return jsonify({"error": "Registration failed"}), 400
+                
+        except Exception as supabase_err:
+            error_msg = str(supabase_err)
+            if "already registered" in error_msg.lower() or "duplicate" in error_msg.lower():
+                return jsonify({"error": "Email already registered"}), 400
+            return jsonify({"error": error_msg}), 400
+            
+    except Exception as err:
+        return jsonify({"error": f"Server error: {str(err)}"}), 500
+
+@app.route("/login", methods=["POST"])
+def login():
+    try:
+        data = request.json or {}
+        email = data.get("email", "").strip()
+        password = data.get("password", "").strip()
+
+        if not email or not password:
+            return jsonify({"error": "Email and password required"}), 400
+
+        try:
+            # Use Supabase Auth to sign in
+            auth_response = supabase.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            
+            if auth_response.user:
+                return jsonify({
+                    "message": "Login successful!",
+                    "user": {
+                        "id": auth_response.user.id,
+                        "email": auth_response.user.email
+                    },
+                    "session": {
+                        "access_token": auth_response.session.access_token,
+                        "refresh_token": auth_response.session.refresh_token
+                    }
+                }), 200
+            else:
+                return jsonify({"error": "Invalid credentials"}), 401
+                
+        except Exception as supabase_err:
+            error_msg = str(supabase_err)
+            if "invalid" in error_msg.lower() or "credentials" in error_msg.lower():
+                return jsonify({"error": "Invalid email or password"}), 401
+            return jsonify({"error": f"Authentication error: {str(supabase_err)}"}), 500
+            
+    except Exception as err:
+        return jsonify({"error": f"Server error: {str(err)}"}), 500
+
+@app.route("/auth/google", methods=["POST"])
+def google_auth():
+    """Handle Google OAuth token from frontend"""
+    try:
+        data = request.json or {}
+        id_token = data.get("id_token", "").strip()
+        
+        if not id_token:
+            return jsonify({"error": "ID token required"}), 400
+        
+        try:
+            # Use Supabase to verify Google token
+            auth_response = supabase.auth.sign_in_with_id_token({
+                "provider": "google",
+                "token": id_token
+            })
+            
+            if auth_response.user:
+                return jsonify({
+                    "message": "Google login successful!",
+                    "user": {
+                        "id": auth_response.user.id,
+                        "email": auth_response.user.email,
+                        "name": auth_response.user.user_metadata.get("full_name", "")
+                    },
+                    "session": {
+                        "access_token": auth_response.session.access_token,
+                        "refresh_token": auth_response.session.refresh_token
+                    }
+                }), 200
+            else:
+                return jsonify({"error": "Google authentication failed"}), 400
+                
+        except Exception as supabase_err:
+            return jsonify({"error": f"Google auth error: {str(supabase_err)}"}), 500
+            
+    except Exception as err:
+        return jsonify({"error": f"Server error: {str(err)}"}), 500
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    """Handle user logout"""
+    try:
+        # Get token from header
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            # Supabase handles token invalidation
+            supabase.auth.sign_out()
+        
+        return jsonify({"message": "Logout successful"}), 200
+    except Exception as err:
+        return jsonify({"error": f"Logout error: {str(err)}"}), 500
 
 # Try optional imports
 DEEPFACE_AVAILABLE = False
