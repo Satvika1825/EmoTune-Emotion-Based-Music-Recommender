@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Camera, Upload, Link2, Play, Pause, Heart, 
   SkipBack, SkipForward, Search, Volume2, Loader2,
-  LogOut, Shuffle, SlidersHorizontal, Share2, X
+  LogOut, Shuffle, SlidersHorizontal, Share2, X, Grid3x3, List as ListIcon
 } from "lucide-react";
 import {
   Select,
@@ -59,6 +59,7 @@ const Dashboard = () => {
   const [detectedImageUrl, setDetectedImageUrl] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("default");
   const [filterBy, setFilterBy] = useState("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -512,7 +513,7 @@ const Dashboard = () => {
               variant="ghost"
               size="sm"
               onClick={handleSignOut}
-              className="gap-2 text-red-400 hover:text-red-300"
+              className="gap-2 text-black-400 hover:text-black-300"
             >
               <LogOut className="w-4 h-4" />
               Sign Out
@@ -655,9 +656,9 @@ const Dashboard = () => {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-3 mb-6 flex items-center gap-3"
+                className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-3 mb-6 flex items-center gap-3 flex-wrap"
               >
-                <div className="relative flex-1">
+                <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     placeholder="Search songs..."
@@ -676,6 +677,26 @@ const Dashboard = () => {
                   <Shuffle className="w-4 h-4" />
                   Shuffle
                 </Button>
+
+                {/* View Toggle Buttons */}
+                <div className="flex gap-1 border border-white/20 rounded-lg p-1 bg-white/5">
+                  <Button
+                    variant={viewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                    className="gap-1"
+                  >
+                    <Grid3x3 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "list" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    className="gap-1"
+                  >
+                    <ListIcon className="w-4 h-4" />
+                  </Button>
+                </div>
 
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-32 h-9 backdrop-blur-md bg-white/10 border-white/20">
@@ -701,6 +722,7 @@ const Dashboard = () => {
             )}
 
             {filteredSongs.length > 0 ? (
+              viewMode === "grid" ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -764,10 +786,47 @@ const Dashboard = () => {
                       )}
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <h3 className="font-semibold truncate text-xs">{song.name}</h3>
                       <p className="text-xs text-muted-foreground truncate">{song.artist}</p>
                       <p className="text-xs text-muted-foreground hidden sm:block">{song.genre}</p>
+                      
+                      {/* Centered Control Buttons */}
+                      <div className="flex items-center justify-center gap-3 py-2">
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => skipCurrentSong()}
+                          className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                          title="Previous"
+                        >
+                          <SkipBack className="w-4 h-4" />
+                        </motion.button>
+                        
+                        <motion.button
+                          whileHover={{ scale: 1.15 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => playSong(song)}
+                          className="p-2 bg-primary hover:bg-primary/90 rounded-full transition-colors"
+                          title="Play"
+                        >
+                          {currentSong?.name === song.name && isPlaying ? (
+                            <Pause className="w-5 h-5 text-primary-foreground" fill="currentColor" />
+                          ) : (
+                            <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
+                          )}
+                        </motion.button>
+                        
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => skipCurrentSong()}
+                          className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                          title="Next"
+                        >
+                          <SkipForward className="w-4 h-4" />
+                        </motion.button>
+                      </div>
                       
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-xs text-muted-foreground">{song.source}</span>
@@ -797,6 +856,85 @@ const Dashboard = () => {
                   </motion.div>
                 ))}
               </motion.div>
+              ) : (
+              // List View
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-3"
+              >
+                {filteredSongs.map((song, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ scale: 1.01, x: 5 }}
+                    className={`backdrop-blur-xl bg-white/10 border border-white/20 rounded-lg p-4 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 ${
+                      currentSong?.name === song.name ? emotionGlows[currentEmotion as keyof typeof emotionGlows] : ""
+                    }`}
+                  >
+                    {/* Album Art */}
+                    <div className="relative w-16 h-16 flex-shrink-0 group">
+                      <img
+                        src={song.image || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400'}
+                        alt={song.name}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      {currentSong?.name === song.name && isPlaying ? (
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={skipCurrentSong}
+                          className="absolute inset-0 m-auto w-6 h-6 bg-red-500 rounded-full flex items-center justify-center shadow-lg"
+                        >
+                          <X className="w-4 h-4 text-white" />
+                        </motion.button>
+                      ) : (
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => playSong(song)}
+                          className="absolute inset-0 m-auto w-8 h-8 bg-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        >
+                          <Play className="w-4 h-4 text-primary-foreground ml-0.5" fill="currentColor" />
+                        </motion.button>
+                      )}
+                    </div>
+
+                    {/* Song Details */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold truncate text-sm">{song.name}</h3>
+                      <p className="text-sm text-muted-foreground truncate">{song.artist}</p>
+                      <p className="text-xs text-muted-foreground">{song.genre} • {song.source}</p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 flex-shrink-0">
+                      <motion.button
+                        whileHover={{ scale: 1.2 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => shareSong(song)}
+                        className="text-blue-400 p-2 hover:bg-white/10 rounded-lg transition-colors"
+                      >
+                        <Share2 className="w-5 h-5" />
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.2 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => toggleFavorite(index)}
+                        className="text-pink-500 p-2 hover:bg-white/10 rounded-lg transition-colors"
+                      >
+                        <Heart
+                          className="w-5 h-5"
+                          fill={favorites.includes(index) ? "currentColor" : "none"}
+                        />
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
+              )
             ) : (
               <div className="text-center py-12">
                 <p className="text-lg text-muted-foreground">
@@ -813,17 +951,33 @@ const Dashboard = () => {
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="w-20 sticky top-24"
+              className={viewMode === "list" ? "w-64 sticky top-24 space-y-4" : "w-20 sticky top-24"}
             >
+              {/* Detected Image (List View Only) */}
+              {viewMode === "list" && detectedImageUrl && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-xl p-2"
+                >
+                  <img
+                    src={detectedImageUrl}
+                    alt="Your detected emotion"
+                    className="w-full rounded-lg shadow-lg"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2 text-center">Your Mood</p>
+                </motion.div>
+              )}
+
               <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-3">
                 <h3 className="text-xs font-semibold mb-3 text-center">Mood</h3>
-                <div className="space-y-2">
+                <div className={viewMode === "list" ? "grid grid-cols-4 gap-2" : "space-y-2"}>
                   {Object.keys(emotionEmojis).map((emotion) => (
                     <Button
                       key={emotion}
                       onClick={() => changeEmotion(emotion)}
                       variant={currentEmotion === emotion ? "default" : "ghost"}
-                      className="w-full h-auto py-2 flex flex-col gap-1"
+                      className={viewMode === "list" ? "h-auto py-2 flex flex-col gap-1" : "w-full h-auto py-2 flex flex-col gap-1"}
                       disabled={isLoading}
                       size="sm"
                     >
