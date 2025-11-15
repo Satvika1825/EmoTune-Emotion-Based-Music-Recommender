@@ -786,72 +786,142 @@ const Dashboard = () => {
                       )}
                     </div>
 
-                    <div className="space-y-2">
-                      <h3 className="font-semibold truncate text-xs">{song.name}</h3>
-                      <p className="text-xs text-muted-foreground truncate">{song.artist}</p>
-                      <p className="text-xs text-muted-foreground hidden sm:block">{song.genre}</p>
-                      
-                      {/* Centered Control Buttons */}
-                      <div className="flex items-center justify-center gap-3 py-2">
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => skipCurrentSong()}
-                          className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                          title="Previous"
-                        >
-                          <SkipBack className="w-4 h-4" />
-                        </motion.button>
-                        
-                        <motion.button
-                          whileHover={{ scale: 1.15 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={() => playSong(song)}
-                          className="p-2 bg-primary hover:bg-primary/90 rounded-full transition-colors"
-                          title="Play"
-                        >
-                          {currentSong?.name === song.name && isPlaying ? (
-                            <Pause className="w-5 h-5 text-primary-foreground" fill="currentColor" />
-                          ) : (
-                            <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
-                          )}
-                        </motion.button>
-                        
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => skipCurrentSong()}
-                          className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                          title="Next"
-                        >
-                          <SkipForward className="w-4 h-4" />
-                        </motion.button>
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-xs text-muted-foreground">{song.source}</span>
-                        <div className="flex gap-1">
-                          <motion.button
-                            whileHover={{ scale: 1.2 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => shareSong(song)}
-                            className="text-blue-400 p-1"
-                          >
-                            <Share2 className="w-4 h-4" />
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ scale: 1.2 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => toggleFavorite(index)}
-                            className="text-pink-500 p-1"
-                          >
-                            <Heart
-                              className="w-4 h-4"
-                              fill={favorites.includes(index) ? "currentColor" : "none"}
-                            />
-                          </motion.button>
+                    <div className="space-y-2 flex-1">
+                      {/* Show full player if this song is playing */}
+                      {currentSong?.name === song.name && isPlaying ? (
+                        <div className="space-y-3">
+                          <div>
+                            <h3 className="font-semibold truncate text-xs">{song.name}</h3>
+                            <p className="text-xs text-muted-foreground truncate">{song.artist}</p>
+                          </div>
+                          
+                          {/* Progress Bar */}
+                          <div className="w-full">
+                            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                              <motion.div
+                                className={`h-full bg-gradient-to-r ${emotionColors[currentEmotion as keyof typeof emotionColors]}`}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                          
+                          {/* Control Buttons */}
+                          <div className="flex items-center justify-center gap-3">
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                            >
+                              <SkipBack className="w-5 h-5" />
+                            </motion.button>
+                            
+                            <motion.button
+                              whileHover={{ scale: 1.15 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={togglePlayPause}
+                              className="p-3 bg-primary hover:bg-primary/90 rounded-full transition-colors"
+                            >
+                              <Pause className="w-6 h-6 text-primary-foreground" fill="currentColor" />
+                            </motion.button>
+                            
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={skipCurrentSong}
+                              className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                            >
+                              <SkipForward className="w-5 h-5" />
+                            </motion.button>
+                          </div>
+                          
+                          {/* Share & Favorite */}
+                          <div className="flex items-center justify-center gap-2">
+                            <motion.button
+                              whileHover={{ scale: 1.2 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => shareSong(song)}
+                              className="text-blue-400 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.2 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => toggleFavorite(index)}
+                              className="text-pink-500 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+                            >
+                              <Heart
+                                className="w-4 h-4"
+                                fill={favorites.includes(index) ? "currentColor" : "none"}
+                              />
+                            </motion.button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        /* Compact view when not playing */
+                        <>
+                          <h3 className="font-semibold truncate text-xs">{song.name}</h3>
+                          <p className="text-xs text-muted-foreground truncate">{song.artist}</p>
+                          <p className="text-xs text-muted-foreground hidden sm:block">{song.genre}</p>
+                          
+                          {/* Play Buttons */}
+                          <div className="flex items-center justify-center gap-3 py-2">
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                              title="Previous"
+                            >
+                              <SkipBack className="w-4 h-4" />
+                            </motion.button>
+                            
+                            <motion.button
+                              whileHover={{ scale: 1.15 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => playSong(song)}
+                              className="p-2 bg-primary hover:bg-primary/90 rounded-full transition-colors"
+                              title="Play"
+                            >
+                              <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
+                            </motion.button>
+                            
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={skipCurrentSong}
+                              className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                              title="Next"
+                            >
+                              <SkipForward className="w-4 h-4" />
+                            </motion.button>
+                          </div>
+                          
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-xs text-muted-foreground">{song.source}</span>
+                            <div className="flex gap-1">
+                              <motion.button
+                                whileHover={{ scale: 1.2 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => shareSong(song)}
+                                className="text-blue-400 p-1"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.2 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => toggleFavorite(index)}
+                                className="text-pink-500 p-1"
+                              >
+                                <Heart
+                                  className="w-4 h-4"
+                                  fill={favorites.includes(index) ? "currentColor" : "none"}
+                                />
+                              </motion.button>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 ))}
@@ -991,85 +1061,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <AnimatePresence>
-        {currentSong && (
-          <motion.div
-            initial={{ y: 100 }}
-            animate={{ y: 0 }}
-            exit={{ y: 100 }}
-            className="fixed bottom-0 left-0 right-0 backdrop-blur-2xl bg-background/80 border-t border-white/20 p-4 z-50"
-          >
-            <div className="container mx-auto">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <img
-                    src={currentSong.image || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400'}
-                    alt={currentSong.name}
-                    className="w-14 h-14 rounded-lg"
-                  />
-                  <div className="min-w-0">
-                    <p className="font-semibold truncate">{currentSong.name}</p>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {currentSong.artist}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex flex-col items-center gap-2 flex-1">
-                  <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" className="hover:bg-white/20">
-                      <SkipBack className="w-5 h-5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      onClick={togglePlayPause}
-                      className="w-10 h-10 rounded-full bg-primary hover:bg-primary/90"
-                    >
-                      {isPlaying ? (
-                        <Pause className="w-5 h-5" fill="currentColor" />
-                      ) : (
-                        <Play className="w-5 h-5 ml-0.5" fill="currentColor" />
-                      )}
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="hover:bg-white/20"
-                      onClick={skipCurrentSong}
-                    >
-                      <SkipForward className="w-5 h-5" />
-                    </Button>
-                  </div>
-
-                  <div className="w-full max-w-md">
-                    <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                      <motion.div
-                        className={`h-full bg-gradient-to-r ${emotionColors[currentEmotion as keyof typeof emotionColors]}`}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1 justify-end">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => currentSong && shareSong(currentSong)}
-                    className="hover:bg-white/20"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </Button>
-                  <Volume2 className="w-4 h-4 text-muted-foreground" />
-                  <div className="w-24 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-white w-3/4" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
