@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Camera, Upload, Link2, Play, Pause, Heart, 
   SkipBack, SkipForward, Search, Volume2, Loader2,
-  LogOut, Shuffle, SlidersHorizontal, Share2, X, Grid3x3, List as ListIcon
+  LogOut, Shuffle, SlidersHorizontal, Share2, X, Grid3x3, List as ListIcon, User
 } from "lucide-react";
 import {
   Select,
@@ -60,12 +60,21 @@ const Dashboard = () => {
   const [sortBy, setSortBy] = useState("default");
   const [filterBy, setFilterBy] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [userEmail, setUserEmail] = useState<string>("");
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const { toast } = useToast();
+
+  // Get user email from localStorage on mount
+  useEffect(() => {
+    const email = localStorage.getItem("userEmail");
+    if (email) {
+      setUserEmail(email);
+    }
+  }, []);
 
   useEffect(() => {
     if (currentSong && audioRef.current) {
@@ -484,8 +493,9 @@ const Dashboard = () => {
         animate={{ y: 0 }}
         className="sticky top-0 z-50 backdrop-blur-xl bg-background/30 border-b border-white/10"
       >
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="container mx-auto px-6 py-4 flex items-center justify-between gap-6">
+          {/* Project Name */}
+          <div className="flex items-center gap-3 flex-shrink-0">
             <motion.div
               animate={{ rotate: [0, 360] }}
               transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
@@ -498,26 +508,42 @@ const Dashboard = () => {
             </h1>
           </div>
           
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDetection(!showDetection)}
-              className="gap-2"
-            >
-              <Camera className="w-4 h-4" />
-              Detect Mood
-            </Button>
-            
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSignOut}
-              className="gap-2 text-black-400 hover:text-black-300"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
+          {/* Search Bar */}
+          <div className="flex-1 max-w-md">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="What do you want to play?"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-white/10 border-white/20 placeholder:text-muted-foreground focus:bg-white/20"
+              />
+            </div>
+          </div>
+          
+          {/* Profile Dropdown */}
+          <div className="flex-shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <User className="w-5 h-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-xl border border-white/20">
+                <div className="px-4 py-2.5 border-b border-white/10">
+                  <p className="text-sm font-semibold">Profile</p>
+                  <p className="text-xs text-muted-foreground truncate">{userEmail || "User"}</p>
+                </div>
+                <DropdownMenuItem 
+                  onClick={handleSignOut}
+                  className="cursor-pointer gap-2 text-red-400 hover:text-red-300"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </motion.nav>

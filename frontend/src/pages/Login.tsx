@@ -93,10 +93,11 @@ const Login = () => {
       if (data.error) {
         alert(data.error);
       } else {
-        // Store tokens in localStorage
+        // Store tokens and email in localStorage
         localStorage.setItem("access_token", data.session.access_token);
         localStorage.setItem("refresh_token", data.session.refresh_token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("userEmail", email);
         
         alert(`Welcome ${data.user.name || data.user.email}!`);
         navigate("/dashboard");
@@ -134,10 +135,11 @@ const Login = () => {
         alert(data.error);
       } else {
         if (data.session) {
-          // Store tokens in localStorage
+          // Store tokens and email in localStorage
           localStorage.setItem("access_token", data.session.access_token);
           localStorage.setItem("refresh_token", data.session.refresh_token);
           localStorage.setItem("user", JSON.stringify(data.user));
+          localStorage.setItem("userEmail", email);
         }
         
         alert(data.message);
