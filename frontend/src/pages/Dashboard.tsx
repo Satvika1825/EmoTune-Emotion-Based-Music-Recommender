@@ -133,6 +133,12 @@ const Dashboard = () => {
     };
   }, [currentSong]);
 
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [cameraActive]);
+
   const addRecentMood = (emotion: string, conf: number) => {
     setRecentMoods(prev => [
       { emotion, timestamp: new Date(), confidence: conf },
@@ -180,12 +186,9 @@ const Dashboard = () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: 1280, height: 720 }
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setCameraActive(true);
-        toast({ title: "Camera activated", description: "Position your face and capture!" });
-      }
+      streamRef.current = stream;
+      setCameraActive(true);
+      toast({ title: "Camera activated", description: "Position your face and capture!" });
     } catch (error) {
       toast({ title: "Camera access denied", description: "Please allow camera permissions", variant: "destructive" });
     }
