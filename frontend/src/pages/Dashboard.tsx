@@ -54,7 +54,7 @@ const Dashboard = () => {
   const [currentEmotion, setCurrentEmotion] = useState<string>("happy");
   const [confidence, setConfidence] = useState<number>(0);
   const [songs, setSongs] = useState<Song[]>([]);
-  const [trendingMusic, setTrendingMusic] = useState<any[]>([]);
+  const [allMoodSongs, setAllMoodSongs] = useState<Record<string, Song[]>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -95,17 +95,17 @@ const Dashboard = () => {
     const email = localStorage.getItem("userEmail");
     if (email) setUserEmail(email);
 
-    // Fetch Trending Jamendo Data
-    const fetchTrending = async () => {
+    // Fetch All Mood Songs
+    const fetchAllMoodSongs = async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/jamendo/browse`);
+        const res = await fetch(`${BACKEND_URL}/jamendo/all-moods`);
         const data = await res.json();
-        if (data.success && data.data.items) {
-          setTrendingMusic(data.data.items);
+        if (data.success && data.data) {
+          setAllMoodSongs(data.data);
         }
-      } catch (e) { console.error("Jamendo fetch error", e); }
+      } catch (e) { console.error("All moods fetch error", e); }
     };
-    fetchTrending();
+    fetchAllMoodSongs();
   }, []);
 
   useEffect(() => {
@@ -392,7 +392,6 @@ const Dashboard = () => {
                   exit={{ opacity: 0, x: -20 }}
                   className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent"
                 >
-
                 </motion.h1>
               )}
             </AnimatePresence>
@@ -660,68 +659,95 @@ const Dashboard = () => {
           <div className="px-6 py-6 pb-32 space-y-8">
 
             {/* Quick Access & Mood Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-1 md:grid-cols-2 ${songs.length > 0 ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
               {/* Liked Songs */}
-              <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-md flex items-center overflow-hidden cursor-pointer group h-20">
-                <div className="w-20 h-full bg-gradient-to-br from-purple-700 to-blue-700 flex items-center justify-center flex-shrink-0">
-                  <Heart className="w-8 h-8 text-white fill-white" />
+              <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-md flex items-center overflow-hidden cursor-pointer group h-16">
+                <div className="w-16 h-full bg-gradient-to-br from-purple-700 to-blue-700 flex items-center justify-center flex-shrink-0">
+                  <Heart className="w-7 h-7 text-white fill-white" />
                 </div>
                 <span className="font-bold px-4 truncate">Liked Songs</span>
-                <div className="ml-auto mr-4 opacity-0 group-hover:opacity-100 transition-opacity shadow-xl bg-green-500 rounded-full p-3 scale-90 group-hover:scale-100">
-                  <Play className="w-5 h-5 text-black fill-black ml-0.5" />
+                <div className="ml-auto mr-4 opacity-0 group-hover:opacity-100 transition-opacity shadow-xl bg-green-500 rounded-full p-2 scale-90 group-hover:scale-100">
+                  <Play className="w-4 h-4 text-black fill-black ml-0.5" />
                 </div>
               </div>
 
-              {/* Detected Emotion Card */}
-              {songs.length > 0 && (
-                <div className="bg-white/5 rounded-md flex items-center p-4 gap-4 h-20">
-                  <span className="text-4xl">
-                    {emotionEmojis[currentEmotion as keyof typeof emotionEmojis]}
-                  </span>
-                  <div className="overflow-hidden">
-                    <p className={`text-sm ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'}`}>Current Vibe</p>
-                    <p className="font-bold capitalize truncate">{currentEmotion}</p>
-                    <p className={`text-xs ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'}`}>{confidence}% confidence</p>
+              {/* Conditional Mood Cards */}
+              {songs.length > 0 ? (
+                <>
+                  {/* Detected Emotion Card */}
+                  <div className="bg-white/5 rounded-md flex items-center p-4 gap-4 h-16">
+                    <span className="text-4xl">
+                      {emotionEmojis[currentEmotion as keyof typeof emotionEmojis]}
+                    </span>
+                    <div className="overflow-hidden">
+                      <p className={`text-sm text-white/80`}>Current Vibe</p>
+                      <p className="font-bold capitalize truncate">{currentEmotion}</p>
+                      <p className={`text-xs text-white/60`}>{confidence}% confidence</p>
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {/* Change Mood Card */}
-              <div className="bg-white/5 rounded-md p-3 flex flex-col justify-center h-20">
-                <p className={`text-xs font-semibold mb-2 text-center ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'}`}>Change Mood</p>
-                <div className="grid grid-cols-7 gap-1">
-                  {Object.keys(emotionEmojis).map((emotion) => (
-                    <Button key={emotion} onClick={() => changeEmotion(emotion)}
-                      variant={currentEmotion === emotion ? "secondary" : "ghost"}
-                      className="h-8 w-8 p-0"
-                      size="icon"
-                      disabled={isLoading}
-                      title={emotion}
-                    >
-                      <span className="text-lg">{emotionEmojis[emotion as keyof typeof emotionEmojis]}</span>
-                    </Button>
-                  ))}
-                </div>
-              </div>
+                  {/* Change Mood Card */}
+                  <div className="bg-white/5 rounded-md p-2 flex flex-col justify-center h-16">
+                    <p className={`text-xs font-semibold mb-1 text-center text-white/80`}>Change Mood</p>
+                    <div className="grid grid-cols-7 gap-1">
+                      {Object.keys(emotionEmojis).map((emotion) => (
+                        <Button key={emotion} onClick={() => changeEmotion(emotion)}
+                          variant={currentEmotion === emotion ? "secondary" : "ghost"}
+                          className="h-7 w-7 p-0"
+                          size="icon"
+                          disabled={isLoading}
+                          title={emotion}
+                        >
+                          <span className="text-md">{emotionEmojis[emotion as keyof typeof emotionEmojis]}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Happy Mood Mix */}
+                  <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-md flex items-center overflow-hidden cursor-pointer group h-16">
+                    <div className="w-16 h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center flex-shrink-0">
+                      <span className="text-3xl">😊</span>
+                    </div>
+                    <span className="font-bold px-4 truncate">Happy Mood Mix</span>
+                  </div>
+                  {/* Calm and Relaxed */}
+                  <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-md flex items-center overflow-hidden cursor-pointer group h-16">
+                    <div className="w-16 h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center flex-shrink-0">
+                      <span className="text-3xl">😌</span>
+                    </div>
+                    <span className="font-bold px-4 truncate">Calm and Relaxed</span>
+                  </div>
+                  {/* Energetic Vibes */}
+                  <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-md flex items-center overflow-hidden cursor-pointer group h-16">
+                    <div className="w-16 h-full bg-gradient-to-br from-pink-500 to-red-500 flex items-center justify-center flex-shrink-0">
+                      <span className="text-3xl">⚡️</span>
+                    </div>
+                    <span className="font-bold px-4 truncate">Energetic Vibes</span>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* Emotion-based Playlist Section */}
-            {songs.length > 0 && (
+            {/* Emotion-based Playlist Section or All Moods Section */}
+            {songs.length > 0 ? (
               <section className="mt-8">
                 <h2 className="text-2xl font-bold mb-4 capitalize">{currentEmotion} Playlist</h2>
                 <div className="bg-black/20 backdrop-blur-sm rounded-lg">
-                  <div className={`grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 border-b border-white/10 ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'} text-sm uppercase`}>
+                  <div className={`grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 border-b border-white/10 text-white/80 text-sm uppercase`}>
                     <span>#</span>
                     <span>Title</span>
                     <span><Volume2 className="w-4 h-4" /></span>
                   </div>
-                  {songs.map((song, i) => (
+                  {filteredSongs.map((song, i) => (
                     <div
                       key={i}
                       className={`grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-3 hover:bg-white/10 rounded-md group transition cursor-pointer ${currentSong?.name === song.name ? 'text-green-500' : ''}`}
                       onClick={() => playSong(song)}
                     >
-                      <div className={`flex items-center justify-center w-4 ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'} group-hover:text-white`}>
+                      <div className={`flex items-center justify-center w-4 text-white/80 group-hover:text-white`}>
                         {currentSong?.name === song.name && isPlaying ? (
                           <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2ef4.gif" className="w-3" />
                         ) : (
@@ -733,55 +759,51 @@ const Dashboard = () => {
                         <img src={song.image || "https://via.placeholder.com/40"} className="w-10 h-10 rounded" />
                         <div className="flex flex-col truncate">
                           <span className="font-bold text-white truncate">{song.name}</span>
-                          <span className={`text-xs ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'} truncate`}>{song.artist}</span>
+                          <span className={`text-xs text-white/80 truncate`}>{song.artist}</span>
                         </div>
                       </div>
-                      <div className={`${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'} text-xs text-right`}>
+                      <div className={`text-white/80 text-xs text-right`}>
                         {Math.floor(Math.random() * 3) + 2}:{Math.floor(Math.random() * 60).toString().padStart(2, '0')}
                       </div>
                     </div>
                   ))}
                 </div>
               </section>
+            ) : (
+              <section className="space-y-8 mt-8">
+                {Object.entries(allMoodSongs).map(([emotion, tracks]) => (
+                  <div key={emotion}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-xl font-bold hover:underline cursor-pointer capitalize flex items-center gap-2">
+                        <span>{emotionEmojis[emotion as keyof typeof emotionEmojis]}</span>
+                        {emotion} Vibes
+                      </h2>
+                    </div>
+                    <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar">
+                      {tracks.length > 0 ? tracks.map((song, idx) => (
+                        <div key={idx} className="min-w-[180px] bg-white/5 backdrop-blur-md p-4 rounded-lg hover:bg-white/10 transition duration-300 group cursor-pointer">
+                          <div className="relative mb-4 shadow-lg rounded-md overflow-hidden">
+                            <img src={song.image || "https://via.placeholder.com/40"} alt={song.name} className="w-full aspect-square object-cover" />
+                            <Button
+                              className="absolute bottom-2 right-2 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 w-12 h-12"
+                              size="icon"
+                              onClick={() => playSong(song)}
+                            >
+                              <Play className="w-6 h-6 fill-current ml-1" />
+                            </Button>
+                          </div>
+                          <h3 className="font-bold truncate mb-1">{song.name}</h3>
+                          <p className={`text-sm text-white/80 truncate line-clamp-2`}>{song.artist}</p>
+                        </div>
+                      )) : (
+                        <p className="text-sm text-gray-400">No songs found for this mood.</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </section>
             )}
 
-            {/* Made For You Section */}
-            <section>
-              <div className="flex items-center justify-between mb-4 mt-8">
-                <h2 className="text-2xl font-bold hover:underline cursor-pointer">Made For You</h2>
-                <span className={`text-sm ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'} font-bold hover:underline cursor-pointer uppercase tracking-wider`}>Show all</span>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {trendingMusic.length > 0 ? trendingMusic.map((item, i) => (
-                  <div key={i} className="bg-[#181818] p-4 rounded-lg hover:bg-[#282828] transition duration-300 group cursor-pointer">
-                    <div className="relative mb-4 shadow-lg rounded-md overflow-hidden">
-                      <img src={item.image || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400"} alt={item.name} className="w-full aspect-square object-cover" />
-                      <Button
-                        className="absolute bottom-2 right-2 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 w-12 h-12"
-                        size="icon"
-                        onClick={() => window.open(item.url, '_blank')}
-                      >
-                        <Play className="w-6 h-6 fill-current ml-1" />
-                      </Button>
-                    </div>
-                    <h3 className="font-bold truncate mb-1">{item.name}</h3>
-                    <p className={`text-sm ${currentEmotion === 'happy' ? 'text-white/80' : 'text-gray-400'} truncate line-clamp-2`}>{item.artist}</p>
-                  </div>
-                )) : (
-                  // Placeholders if no data
-                  [1, 2, 3, 4, 5].map((_, i) => (
-                    <div key={i} className="bg-[#181818] p-4 rounded-lg hover:bg-[#282828] transition duration-300 group cursor-pointer">
-                      <div className="relative mb-4 shadow-lg rounded-md overflow-hidden bg-[#282828] aspect-square flex items-center justify-center">
-                        <span className="text-4xl opacity-20">🎵</span>
-                      </div>
-                      <div className="h-4 bg-[#282828] rounded w-3/4 mb-2" />
-                      <div className="h-3 bg-[#282828] rounded w-1/2" />
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
           </div>
         </motion.main>
       </div>

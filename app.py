@@ -2,14 +2,12 @@ import os
 import shutil
 import tempfile
 import base64
-from io import BytesIO
-
-from flask import Flask, render_template, request, jsonify
-from supabase import create_client, Client
 import requests
-from flask_cors import CORS
 import cv2
 import numpy as np
+from flask import Flask, request, jsonify
+from supabase import create_client, Client
+from flask_cors import CORS
 
 # -------------------- Flask setup --------------------
 app = Flask(__name__)
@@ -185,68 +183,195 @@ def logout():
     except Exception as err:
         return jsonify({"error": f"Logout error: {str(err)}"}), 500
 
-# -------------------- ML/AI Setup --------------------
-DEEPFACE_AVAILABLE = False
-MODEL_AVAILABLE = False
-model = None
+# -------------------- ONNX Emotion Detection Setup --------------------
+ONNX_MODEL_URL = "https://github.com/spmallick/learnopencv/raw/master/Facial-Emotion-Recognition/emotion-ferplus-8.onnx"
+HAAR_CASCADE_URL = "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
 
-try:
-    from deepface import DeepFace
-    DEEPFACE_AVAILABLE = True
-    print("✅ DeepFace loaded successfully")
-except Exception as e:
-    print(f"⚠️ DeepFace not available: {e}")
-    DEEPFACE_AVAILABLE = False
+MODEL_DIR = "models"
+os.makedirs(MODEL_DIR, exist_ok=True)
 
-try:
-    import tensorflow as tf
-    from tensorflow.keras.models import load_model
-    MODEL_PATH = os.path.join(os.path.dirname(__file__), 'fer2013_vgg16.h5')
-    if os.path.exists(MODEL_PATH):
-        try:
-            model = load_model(MODEL_PATH)
-            MODEL_AVAILABLE = True
-            print("✅ Keras model loaded from", MODEL_PATH)
-        except Exception as e:
-            print(f"⚠️ Failed loading Keras model: {e}")
-            MODEL_AVAILABLE = False
-    else:
-        print("ℹ️ No Keras model file found at", MODEL_PATH)
-        MODEL_AVAILABLE = False
-except Exception as e:
-    print(f"⚠️ TensorFlow/Keras not available: {e}")
-    MODEL_AVAILABLE = False
+ONNX_MODEL_PATH = os.path.join(MODEL_DIR, "emotion-ferplus-8.onnx")
+CASCADE_PATH = os.path.join(MODEL_DIR, "haarcascade_frontalface_default.xml")
 
-emotion_labels = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+# FER+ emotion labels (8 emotions)
+FER_EMOTIONS = ['neutral', 'happiness', 'surprise', 'sadness', 'anger', 'disgust', 'fear', 'contempt']
+
+# Map FER+ emotions to your app's 7 emotions
+EMOTION_MAPPING = {
+    'neutral': 'neutral',
+    'happiness': 'happy',
+    'surprise': 'surprise',
+    'sadness': 'sad',
+    'anger': 'angry',
+    'disgust': 'disgust',
+    'fear': 'fear',
+    'contempt': 'angry'  # Map contempt to angry
+}
+
 JAMENDO_CLIENT_ID = "0ecfada7"
 
-def detect_emotion(img_path):
-    """Detects emotion from an image using DeepFace with MTCNN backend."""
-    if not DEEPFACE_AVAILABLE:
-        print("⚠️ DeepFace not available, returning neutral.")
-        return "neutral", 100.0, None
+# Global model variables
+face_cascade = None
+emotion_net = None
+MODEL_LOADED = False
 
+def download_model_file(url, filepath):
+    """Download model file if not exists"""
+    if os.path.exists(filepath):
+        print(f"✅ Model exists: {filepath}")
+        return True
+    
+    print(f"📥 Downloading: {os.path.basename(filepath)}...")
     try:
-        # Using MTCNN for more robust face detection.
-        # Also, not enforcing detection to avoid crashes on images with no faces.
-        results = DeepFace.analyze(
-            img_path=img_path,
-            actions=['emotion'],
-            detector_backend='mtcnn',
-            enforce_detection=False
+        resp = requests.get(url, timeout=60)
+        resp.raise_for_status()
+        with open(filepath, 'wb') as f:
+            f.write(resp.content)
+        print(f"✅ Downloaded: {os.path.basename(filepath)}")
+        return True
+    except Exception as e:
+        print(f"❌ Download failed: {e}")
+        return False
+
+def load_models():
+    """Load face detection and emotion recognition models"""
+    global face_cascade, emotion_net, MODEL_LOADED
+    
+    if MODEL_LOADED:
+        return True
+    
+    print("\n" + "="*60)
+    print("📦 Loading Emotion Detection Models")
+    print("="*60)
+    
+    # Download models if needed
+    if not download_model_file(HAAR_CASCADE_URL, CASCADE_PATH):
+        return False
+    if not download_model_file(ONNX_MODEL_URL, ONNX_MODEL_PATH):
+        return False
+    
+    # Load models
+    try:
+        face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
+        if face_cascade.empty():
+            print("❌ Failed to load Haar Cascade")
+            return False
+        print("✅ Haar Cascade loaded")
+        
+        emotion_net = cv2.dnn.readNetFromONNX(ONNX_MODEL_PATH)
+        print("✅ ONNX Emotion model loaded")
+        
+        MODEL_LOADED = True
+        print("="*60 + "\n")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Model loading error: {e}")
+        return False
+
+def softmax(x):
+    """Compute softmax values for scores"""
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum()
+
+def detect_emotion_onnx(img_path):
+    """Detect emotion using ONNX model"""
+    if not MODEL_LOADED:
+        if not load_models():
+            print("❌ Models not loaded")
+            return "neutral", 0.0, None
+    
+    try:
+        print(f"\n🎭 Analyzing: {img_path}")
+        
+        # Load image
+        img = cv2.imread(img_path)
+        if img is None:
+            print("❌ Could not read image")
+            return "neutral", 0.0, None
+        
+        print(f"   Image size: {img.shape[1]}x{img.shape[0]}")
+        
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Detect faces
+        faces = face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(30, 30)
         )
         
-        # DeepFace returns a list of dicts (one for each face). We'll use the first one.
-        result = results[0] if isinstance(results, list) else results
+        print(f"   Detected {len(faces)} face(s)")
         
-        emotions = result.get('emotion', {})
-        dominant_emotion = result.get('dominant_emotion', 'neutral')
-        confidence = emotions.get(dominant_emotion, 0)
+        if len(faces) == 0:
+            # Try with more lenient settings
+            print("   Retrying with lenient settings...")
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.05,
+                minNeighbors=3,
+                minSize=(20, 20)
+            )
+            print(f"   Detected {len(faces)} face(s) on retry")
         
-        return dominant_emotion, confidence, emotions
-
+        if len(faces) == 0:
+            print("⚠️ No faces detected")
+            return "neutral", 0.0, None
+        
+        # Use the largest face
+        face = max(faces, key=lambda rect: rect[2] * rect[3])
+        x, y, w, h = face
+        
+        print(f"   Analyzing face at ({x},{y}) size {w}x{h}")
+        
+        # Extract and preprocess face ROI
+        roi_gray = gray[y:y+h, x:x+w]
+        roi_resized = cv2.resize(roi_gray, (64, 64))
+        
+        # Create blob for ONNX model
+        blob = cv2.dnn.blobFromImage(
+            roi_resized,
+            scalefactor=1.0,
+            size=(64, 64),
+            mean=(0, 0, 0),
+            swapRB=False,
+            crop=False
+        )
+        
+        # Run inference
+        emotion_net.setInput(blob)
+        scores = emotion_net.forward()[0]
+        probs = softmax(scores)
+        
+        # Get emotion
+        pred_idx = np.argmax(probs)
+        fer_emotion = FER_EMOTIONS[pred_idx]
+        confidence = float(probs[pred_idx] * 100)
+        
+        # Map to app's emotion labels
+        mapped_emotion = EMOTION_MAPPING.get(fer_emotion, fer_emotion)
+        
+        # Create all_emotions dict with mapped labels
+        all_emotions = {}
+        for i, fer_label in enumerate(FER_EMOTIONS):
+            mapped_label = EMOTION_MAPPING.get(fer_label, fer_label)
+            prob = float(probs[i] * 100)
+            if mapped_label in all_emotions:
+                all_emotions[mapped_label] += prob
+            else:
+                all_emotions[mapped_label] = prob
+        
+        print(f"✅ Detected: {mapped_emotion} ({confidence:.1f}%)")
+        print(f"   Raw scores: {dict(zip(FER_EMOTIONS, [f'{p*100:.1f}%' for p in probs]))}")
+        
+        return mapped_emotion, confidence, all_emotions
+        
     except Exception as e:
-        print(f"❌ DeepFace analysis failed for {img_path}: {e}")
+        print(f"❌ Detection error: {e}")
+        import traceback
+        traceback.print_exc()
         return "neutral", 0.0, None
 
 # -------------------- Jamendo Helpers --------------------
@@ -355,8 +480,11 @@ def download_image_from_url(image_url):
 def process_base64_image(image_data_str):
     """Decodes a base64 image string and saves to a temporary file."""
     try:
-        # Remove header e.g., "data:image/jpeg;base64,"
-        image_data = base64.b64decode(image_data_str.split(',')[1])
+        if ',' in image_data_str:
+            image_data = base64.b64decode(image_data_str.split(',')[1])
+        else:
+            image_data = base64.b64decode(image_data_str)
+            
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
         tmp.write(image_data)
         tmp.close()
@@ -377,9 +505,15 @@ def predict():
     
     temp_filepath = None
     filepath = None
+    
     try:
+        print("\n" + "="*60)
+        print("🎭 EMOTION DETECTION REQUEST (ONNX)")
+        print("="*60)
+        
         input_type = request.form.get('input_type', 'file')
         
+        # Handle different input types
         if input_type == 'url':
             image_url = request.form.get('image_url', '').strip()
             if not image_url:
@@ -389,6 +523,7 @@ def predict():
                 return jsonify({'error': 'Failed to download image from URL', 'success': False}), 400
             filepath = temp_filepath
             filename = 'url_image.jpg'
+            
         elif input_type == 'camera':
             image_data = request.form.get('image_data')
             if not image_data:
@@ -398,33 +533,48 @@ def predict():
                 return jsonify({'error': 'Failed to process camera image', 'success': False}), 400
             filepath = temp_filepath
             filename = 'camera_capture.jpg'
-        else: # 'file'
+            
+        else:  # file upload
             if 'file' not in request.files:
                 return jsonify({'error': 'No file uploaded', 'success': False}), 400
             file = request.files['file']
             if file.filename == '':
                 return jsonify({'error': 'No file selected', 'success': False}), 400
+            
             allowed = {'png', 'jpg', 'jpeg'}
             ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
             if ext not in allowed:
                 return jsonify({'error': 'Invalid file type. Use png, jpg, or jpeg', 'success': False}), 400
             
-            filename = "uploaded_image." + ext
+            filename = f"upload_{int.from_bytes(os.urandom(4), 'big')}.{ext}"
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
 
-        emotion, confidence, all_emotions = detect_emotion(filepath)
+        # Verify file
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File processing failed', 'success': False}), 400
+        
+        print(f"📸 File: {os.path.getsize(filepath)} bytes")
+        
+        # Detect emotion using ONNX
+        emotion, confidence, all_emotions = detect_emotion_onnx(filepath)
+        
+        # Get music
         jamendo_tracks = get_jamendo_tracks(emotion, limit=5)
 
-        # Copy temp file to uploads so it can be served
-        if temp_filepath:
+        # Copy temp file to uploads if needed
+        if temp_filepath and temp_filepath != filepath:
             dest = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             try:
                 shutil.copy(temp_filepath, dest)
-            except Exception as copy_err:
-                print(f"Could not copy temp file: {copy_err}")
+                filepath = dest
+            except Exception as e:
+                print(f"Copy warning: {e}")
         
         image_path = f'uploads/{filename}'
+        
+        print(f"✅ Result: {emotion} ({confidence:.1f}%)")
+        print("="*60 + "\n")
 
         return jsonify({
             'success': True,
@@ -432,20 +582,22 @@ def predict():
             'confidence': round(confidence, 2),
             'tracks': jamendo_tracks,
             'image_path': image_path,
-            'all_emotions': all_emotions if all_emotions else {}
+            'all_emotions': all_emotions if all_emotions else {},
+            'method': 'ONNX-FER+'
         })
 
     except Exception as e:
-        print('Predict error:', e)
+        print(f'\n❌ ERROR: {e}')
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e), 'success': False}), 500
+        
     finally:
-        if temp_filepath and os.path.exists(temp_filepath):
+        if temp_filepath and os.path.exists(temp_filepath) and temp_filepath != filepath:
             try:
                 os.unlink(temp_filepath)
-            except Exception as unlink_err:
-                print(f"Error removing temp file: {unlink_err}")
+            except:
+                pass
 
 @app.route('/change-emotion', methods=['POST', 'OPTIONS'])
 def change_emotion():
@@ -459,6 +611,7 @@ def change_emotion():
     try:
         data = request.get_json() or {}
         new_emotion = data.get('emotion', '').lower()
+        emotion_labels = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
         if new_emotion not in emotion_labels:
             return jsonify({'error': 'Invalid emotion', 'success': False}), 400
         tracks = get_jamendo_tracks(new_emotion, limit=5)
@@ -467,45 +620,38 @@ def change_emotion():
         print('Change emotion error:', e)
         return jsonify({'error': str(e), 'success': False}), 500
 
-@app.route('/songs/all', methods=['GET'])
-def get_all_songs():
+@app.route('/jamendo/all-moods', methods=['GET'])
+def get_all_mood_songs():
     try:
-        tracks = get_jamendo_tracks('happy', limit=10)
+        emotion_labels = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+        all_moods_data = {}
+        songs_per_mood = 6 
+        
+        for emotion in emotion_labels:
+            tracks = get_jamendo_tracks(emotion, limit=songs_per_mood)
+            all_moods_data[emotion] = tracks
+            
         return jsonify({
             'success': True,
-            'tracks': tracks
+            'data': all_moods_data
         })
     except Exception as e:
+        print(f"Error fetching all moods: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
 
-@app.route('/jamendo/browse', methods=['GET'])
-def jamendo_browse():
-    try:
-        data = get_jamendo_browse_data()
-        return jsonify({'success': True, 'data': data})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-def test_jamendo():
-    print("\n🎵 Testing Jamendo API...")
-    try:
-        t = get_jamendo_tracks('happy', limit=1)
-        print(f"✅ Jamendo working - found {len(t)} tracks")
-    except Exception as e:
-        print(f"❌ Jamendo test failed: {e}")
-
 if __name__ == '__main__':
     print('\n' + '='*60)
-    print('🎭 Starting EmoTune Server (Robust Mode)')
+    print('🎭 EmoTune Server - ONNX Edition')
     print('='*60)
-    print(f'DEEPFACE_AVAILABLE = {DEEPFACE_AVAILABLE}')
-    print(f'MODEL_AVAILABLE = {MODEL_AVAILABLE}')
+    
+    # Pre-load models
+    load_models()
+    
     print('='*60)
-    test_jamendo()
-    print('='*60)
-    print('🚀 Server running on http://0.0.0.0:5000')
+    print('🚀 Server: http://0.0.0.0:5000')
     print('='*60 + '\n')
+    
     app.run(debug=True, host='0.0.0.0', port=5000)
