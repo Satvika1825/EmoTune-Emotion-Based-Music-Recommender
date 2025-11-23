@@ -7,7 +7,8 @@ import {
   Camera, Upload, Link2, Play, Pause, Heart,
   SkipBack, SkipForward, Search, Volume2, Loader2,
   LogOut, Shuffle, SlidersHorizontal, Share2, X, Grid3x3,
-  List as ListIcon, User, Home, Library, Plus, Menu, ChevronLeft, Bell
+  List as ListIcon, User, Home, Library, Plus, Menu, ChevronLeft, Bell,
+  ArrowDownCircle, MoreHorizontal
 } from "lucide-react";
 import {
   Select,
@@ -738,6 +739,39 @@ const Dashboard = () => {
             {songs.length > 0 ? (
               <section className="mt-8">
                 <h2 className="text-2xl font-bold mb-4 capitalize">{currentEmotion} Playlist</h2>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <Button
+                      size="icon"
+                      className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl hover:scale-105 transition"
+                      onClick={togglePlayPause}
+                    >
+                      {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current ml-1" />}
+                    </Button>
+                    <div className="w-10 h-10 rounded-md border-2 border-gray-600 overflow-hidden">
+                      <img src={imageUrl || "https://github.com/shadcn.png"} alt="User" className="w-full h-full object-cover" />
+                    </div>
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                      <Shuffle className="w-6 h-6" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                      <Plus className="w-6 h-6" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                      <ArrowDownCircle className="w-6 h-6" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                      <MoreHorizontal className="w-6 h-6" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-white/90">List</span>
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                      <ListIcon className="w-6 h-6" />
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="bg-black/20 backdrop-blur-sm rounded-lg">
                   <div className={`grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 border-b border-white/10 text-white/80 text-sm uppercase`}>
                     <span>#</span>
@@ -782,24 +816,26 @@ const Dashboard = () => {
                         {emotion} Vibes
                       </h2>
                     </div>
-                    <div className="flex overflow-x-auto space-x-4 pb-4 no-scrollbar">
-                      {tracks.length > 0 ? tracks.map((song, idx) => (
-                        <div key={idx} className="min-w-[180px] bg-white/5 backdrop-blur-md p-4 rounded-lg hover:bg-white/10 transition duration-300 group cursor-pointer">
-                          <div className="relative mb-4 shadow-lg rounded-md overflow-hidden">
-                            <img src={song.image || "https://via.placeholder.com/40"} alt={song.name} className="w-full aspect-square object-cover" />
-                            <Button
-                              className="absolute bottom-2 right-2 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 w-12 h-12"
-                              size="icon"
-                              onClick={() => playSong(song)}
-                            >
-                              <Play className="w-6 h-6 fill-current ml-1" />
-                            </Button>
+                    <div className="flex overflow-x-auto space-x-2 pb-4 no-scrollbar">
+                      {tracks.length > 0 ? (
+                        tracks.map((song, idx) => (
+                          <div key={idx} className="min-w-[180px] w-[200px] p-2 rounded-none hover:bg-white/5 transition duration-300 group cursor-pointer">
+                            <div className="relative mb-3 shadow-lg rounded-none overflow-hidden">
+                              <img src={song.image || "https://via.placeholder.com/40"} alt={song.name} className="w-full aspect-square object-cover" />
+                              <Button
+                                className="absolute bottom-2 right-2 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 w-10 h-10"
+                                size="icon"
+                                onClick={() => playSong(song)}
+                              >
+                                <Play className="w-5 h-5 fill-current ml-0.5" />
+                              </Button>
+                            </div>
+                            <h3 className="font-bold truncate text-white mb-1">{song.name}</h3>
+                            <p className="text-sm text-white/70 truncate">{song.artist}</p>
                           </div>
-                          <h3 className="font-bold truncate mb-1">{song.name}</h3>
-                          <p className={`text-sm text-white/80 truncate line-clamp-2`}>{song.artist}</p>
-                        </div>
-                      )) : (
-                        <p className="text-sm text-gray-400">No songs found for this mood.</p>
+                        ))
+                      ) : (
+                        <p className="text-sm text-white/70">No songs found for this mood.</p>
                       )}
                     </div>
                   </div>
