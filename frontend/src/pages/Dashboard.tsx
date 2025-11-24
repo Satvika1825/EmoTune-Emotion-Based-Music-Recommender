@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +8,7 @@ import {
   Camera, Upload, Link2, Play, Pause, Heart,
   SkipBack, SkipForward, Search, Volume2, Loader2,
   LogOut, Shuffle, SlidersHorizontal, Share2, X, Grid3x3,
-  List as ListIcon, User, Home, Library, Plus, Menu, ChevronLeft, Bell,
+  List as ListIcon, User, Home, Library, Plus, Menu, ChevronLeft, ChevronRight, Bell,
   ArrowDownCircle, MoreHorizontal
 } from "lucide-react";
 import {
@@ -80,8 +81,20 @@ const Dashboard = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const scrollRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const { toast } = useToast();
+
+  const handleMoodScroll = (emotion: string, direction: 'left' | 'right') => {
+    const container = scrollRefs.current[emotion];
+    if (container) {
+      const scrollAmount = container.offsetWidth * 0.8;
+      container.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
+    }
+  };
 
   const toggleMoodDetector = () => {
     const newVisibility = !moodDetectorVisible;
@@ -147,7 +160,11 @@ const Dashboard = () => {
     ]);
   };
 
+  const navigate = useNavigate();
+
   const handleSignOut = () => {
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("sb-bjbyohwqvpamwvnvlnrb-auth-token"); // Clear Supabase token if stored
     setCurrentEmotion("happy");
     setConfidence(0);
     setSongs([]);
@@ -156,6 +173,7 @@ const Dashboard = () => {
     setDetectedImageUrl(null);
     setShowDetection(true);
     toast({ title: "Signed out successfully", description: "See you next time!" });
+    navigate("/login");
   };
 
   const shuffleSongs = () => {
@@ -172,6 +190,24 @@ const Dashboard = () => {
       navigator.clipboard.writeText(shareText);
       toast({ title: "Copied to clipboard!", description: "Share this song with your friends" });
     }
+  };
+
+  const downloadPlaylist = () => {
+    if (songs.length === 0) {
+      toast({ title: "Playlist is empty", description: "No songs to download.", variant: "destructive" });
+      return;
+    }
+    const playlistContent = songs.map(song => `${song.name} - ${song.artist}`).join('\n');
+    const blob = new Blob([playlistContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentEmotion}-playlist.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: "Playlist downloaded", description: "Check your downloads folder." });
   };
 
   const skipCurrentSong = () => {
@@ -409,8 +445,8 @@ const Dashboard = () => {
             </Button>
           </div>
 
-          <div className="flex-1 flex flex-col justify-between">
-            <div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
               {/* Navigation */}
               <nav className="p-3 space-y-1">
                 {navItems.map((item) => (
@@ -523,7 +559,10 @@ const Dashboard = () => {
             <div className="p-3 border-t border-white/10">
               <motion.button
                 onClick={handleSignOut}
-                className="w-full flex items-center gap-4 px-3 py-2 rounded-lg text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                className={`w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-colors ${currentEmotion === 'happy'
+                  ? 'text-black hover:bg-black/10'
+                  : 'text-red-500 hover:text-red-400 hover:bg-red-500/10'
+                  }`}
               >
                 <LogOut className="w-5 h-5 flex-shrink-0" />
                 <AnimatePresence>
@@ -565,14 +604,19 @@ const Dashboard = () => {
                 >
                   🎵
                 </motion.div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent">
+                <h1 className={`text-2xl font-bold ${currentEmotion === 'happy' ? 'text-black' : 'bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent'}`}>
                   EmoTune
                 </h1>
               </div>
 
               {/* Center: Home icon + Search Bar and Detect Mood Button */}
               <div className="flex-1 flex items-center justify-center gap-2">
-                <Button variant="ghost" size="icon" className="relative">
+                <Button variant="ghost" size="icon" className="relative" onClick={() => {
+                  setCurrentEmotion("happy");
+                  setConfidence(0);
+                  setSongs([]);
+                  setCurrentSong(null);
+                }}>
                   <Home className="w-5 h-5" />
                 </Button>
                 <div className="relative w-full max-w-md">
@@ -751,60 +795,88 @@ const Dashboard = () => {
                     <div className="w-10 h-10 rounded-md border-2 border-gray-600 overflow-hidden">
                       <img src={imageUrl || "https://github.com/shadcn.png"} alt="User" className="w-full h-full object-cover" />
                     </div>
-                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10" onClick={shuffleSongs}>
                       <Shuffle className="w-6 h-6" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10" onClick={() => toast({ title: "Add to Playlist", description: "Feature coming soon!" })}>
                       <Plus className="w-6 h-6" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10" onClick={downloadPlaylist}>
                       <ArrowDownCircle className="w-6 h-6" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10" onClick={() => toast({ title: "More Options", description: "Feature coming soon!" })}>
                       <MoreHorizontal className="w-6 h-6" />
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-white/90">List</span>
-                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10">
-                      <ListIcon className="w-6 h-6" />
+                    <span className="text-sm font-semibold text-white/90 capitalize">{viewMode}</span>
+                    <Button variant="ghost" size="icon" className="text-white/90 hover:text-white hover:bg-white/10" onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}>
+                      {viewMode === 'list' ? <Grid3x3 className="w-5 h-5" /> : <ListIcon className="w-5 h-5" />}
                     </Button>
                   </div>
                 </div>
 
-                <div className="bg-black/20 backdrop-blur-sm rounded-lg">
-                  <div className={`grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-2 border-b border-white/10 text-white/80 text-sm uppercase`}>
-                    <span>#</span>
-                    <span>Title</span>
-                    <span><Volume2 className="w-4 h-4" /></span>
-                  </div>
-                  {filteredSongs.map((song, i) => (
-                    <div
-                      key={i}
-                      className={`grid grid-cols-[auto_1fr_auto] gap-4 px-4 py-3 hover:bg-white/10 rounded-md group transition cursor-pointer ${currentSong?.name === song.name ? 'text-green-500' : ''}`}
-                      onClick={() => playSong(song)}
-                    >
-                      <div className={`flex items-center justify-center w-4 text-white/80 group-hover:text-white`}>
-                        {currentSong?.name === song.name && isPlaying ? (
-                          <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2ef4.gif" className="w-3" />
-                        ) : (
-                          <span className="group-hover:hidden">{i + 1}</span>
-                        )}
-                        <Play className="w-3 h-3 hidden group-hover:block text-white" fill="currentColor" />
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {filteredSongs.map((song, i) => (
+                      <div key={i} onClick={() => playSong(song)} className="bg-white/5 p-4 rounded-lg hover:bg-white/10 transition group cursor-pointer">
+                        <div className="relative mb-3">
+                          <img src={song.image || "https://via.placeholder.com/150"} alt={song.name} className="w-full aspect-square object-cover rounded-md" />
+                          <Button
+                            className="absolute bottom-2 right-2 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 w-10 h-10"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (currentSong?.name === song.name) {
+                                togglePlayPause();
+                              } else {
+                                playSong(song);
+                              }
+                            }}
+                          >
+                            {currentSong?.name === song.name && isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+                          </Button>
+                        </div>
+                        <h3 className="font-bold truncate text-white">{song.name}</h3>
+                        <p className="text-sm text-white/70 truncate">{song.artist}</p>
                       </div>
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <img src={song.image || "https://via.placeholder.com/40"} className="w-10 h-10 rounded" />
-                        <div className="flex flex-col truncate">
-                          <span className="font-bold text-white truncate">{song.name}</span>
-                          <span className={`text-xs text-white/80 truncate`}>{song.artist}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-black/20 backdrop-blur-sm">
+                    <div className={`grid grid-cols-[auto_1fr_auto] px-2 py-2 border-b border-white/10 text-white/80 text-sm uppercase`}>
+                      <span>#</span>
+                      <span>Title</span>
+                      <span><Volume2 className="w-4 h-4" /></span>
+                    </div>
+                    {filteredSongs.map((song, i) => (
+                      <div
+                        key={i}
+                        className={`grid grid-cols-[auto_1fr_auto] px-2 py-3 hover:bg-white/10 group transition cursor-pointer ${currentSong?.name === song.name ? 'text-green-500' : ''}`}
+                        onClick={() => playSong(song)}
+                      >
+                        <div className={`flex items-center justify-center w-4 text-white/80 group-hover:text-white`}>
+                          {currentSong?.name === song.name && isPlaying ? (
+                            <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2ef4.gif" className="w-3" />
+                          ) : (
+                            <span className="group-hover:hidden">{i + 1}</span>
+                          )}
+                          <Play className="w-3 h-3 hidden group-hover:block text-white" fill="currentColor" />
+                        </div>
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <img src={song.image || "https://via.placeholder.com/40"} className="w-10 h-10 rounded" />
+                          <div className="flex flex-col truncate">
+                            <span className="font-bold text-white truncate">{song.name}</span>
+                            <span className={`text-xs text-white/80 truncate`}>{song.artist}</span>
+                          </div>
+                        </div>
+                        <div className={`text-white/80 text-xs text-right`}>
+                          {Math.floor(Math.random() * 3) + 2}:{Math.floor(Math.random() * 60).toString().padStart(2, '0')}
                         </div>
                       </div>
-                      <div className={`text-white/80 text-xs text-right`}>
-                        {Math.floor(Math.random() * 3) + 2}:{Math.floor(Math.random() * 60).toString().padStart(2, '0')}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </section>
             ) : (
               <section className="space-y-8 mt-8">
@@ -816,27 +888,46 @@ const Dashboard = () => {
                         {emotion} Vibes
                       </h2>
                     </div>
-                    <div className="flex overflow-x-auto space-x-2 pb-4 no-scrollbar">
-                      {tracks.length > 0 ? (
-                        tracks.map((song, idx) => (
-                          <div key={idx} className="min-w-[180px] w-[200px] p-2 rounded-none hover:bg-white/5 transition duration-300 group cursor-pointer">
-                            <div className="relative mb-3 shadow-lg rounded-none overflow-hidden">
-                              <img src={song.image || "https://via.placeholder.com/40"} alt={song.name} className="w-full aspect-square object-cover" />
-                              <Button
-                                className="absolute bottom-2 right-2 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 w-10 h-10"
-                                size="icon"
-                                onClick={() => playSong(song)}
-                              >
-                                <Play className="w-5 h-5 fill-current ml-0.5" />
-                              </Button>
+                    <div className="relative group">
+                      <Button
+                        variant="ghost" size="icon"
+                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-full w-12 rounded-l-lg bg-black/20 hover:bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+                        onClick={() => handleMoodScroll(emotion, 'left')}
+                      >
+                        <ChevronLeft className="w-6 h-6" />
+                      </Button>
+                      <div
+                        ref={(el) => (scrollRefs.current[emotion] = el)}
+                        className="flex overflow-x-auto space-x-2 pb-4 no-scrollbar scroll-smooth"
+                      >
+                        {tracks.length > 0 ? (
+                          tracks.map((song, idx) => (
+                            <div key={idx} className="min-w-[180px] w-[200px] p-2 rounded-none hover:bg-white/5 transition duration-300 group/song cursor-pointer">
+                              <div className="relative mb-3 shadow-lg rounded-none overflow-hidden">
+                                <img src={song.image || "https://via.placeholder.com/40"} alt={song.name} className="w-full aspect-square object-cover" />
+                                <Button
+                                  className="absolute bottom-2 right-2 rounded-full bg-green-500 hover:bg-green-400 text-black shadow-xl opacity-0 translate-y-2 group-hover/song:opacity-100 group-hover/song:translate-y-0 transition-all duration-300 w-10 h-10"
+                                  size="icon"
+                                  onClick={() => playSong(song)}
+                                >
+                                  <Play className="w-5 h-5 fill-current ml-0.5" />
+                                </Button>
+                              </div>
+                              <h3 className="font-bold truncate text-white mb-1">{song.name}</h3>
+                              <p className="text-sm text-white/70 truncate">{song.artist}</p>
                             </div>
-                            <h3 className="font-bold truncate text-white mb-1">{song.name}</h3>
-                            <p className="text-sm text-white/70 truncate">{song.artist}</p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-white/70">No songs found for this mood.</p>
-                      )}
+                          ))
+                        ) : (
+                          <p className="text-sm text-white/70">No songs found for this mood.</p>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-full w-12 rounded-r-lg bg-black/20 hover:bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+                        onClick={() => handleMoodScroll(emotion, 'right')}
+                      >
+                        <ChevronRight className="w-6 h-6" />
+                      </Button>
                     </div>
                   </div>
                 ))}
