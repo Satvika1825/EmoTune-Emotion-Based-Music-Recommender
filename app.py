@@ -496,6 +496,236 @@ def get_all_mood_songs():
             'success': False,
             'error': str(e)
         }), 500
+# Add these routes to your existing Flask app (app.py)
 
+# -------------------- Profile Routes --------------------
+@app.route("/profile", methods=["GET"])
+def get_profile():
+    """Get user profile information"""
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        token = auth_header.split(" ")[1]
+        
+        # Get user from token
+        try:
+            user = supabase.auth.get_user(token)
+            if not user or not user.user:
+                return jsonify({"error": "Invalid token"}), 401
+            
+            user_id = user.user.id
+            
+            # Fetch profile from profiles table
+            profile_response = supabase.table("profiles").select("*").eq("id", user_id).execute()
+            
+            if profile_response.data and len(profile_response.data) > 0:
+                profile = profile_response.data[0]
+                
+                # Get listening history count
+                history_response = supabase.table("listening_history").select("id", count="exact").eq("user_id", user_id).execute()
+                listening_count = history_response.count if history_response.count else 0
+                
+                # Get favorites count
+                favorites_response = supabase.table("favorites").select("id", count="exact").eq("user_id", user_id).execute()
+                favorites_count = favorites_response.count if favorites_response.count else 0
+                
+                return jsonify({
+                    "success": True,
+                    "profile": {
+                        "id": profile.get("id"),
+                        "email": profile.get("email"),
+                        "username": profile.get("username", "User"),
+                        "avatar_url": profile.get("avatar_url"),
+                        "bio": profile.get("bio", ""),
+                        "created_at": profile.get("created_at"),
+                        "listening_count": listening_count,
+                        "favorites_count": favorites_count
+                    }
+                }), 200
+            else:
+                # Profile doesn't exist, create one
+                new_profile = {
+                    "id": user_id,
+                    "email": user.user.email,
+                    "username": user.user.email.split('@')[0]
+                }
+                supabase.table("profiles").insert(new_profile).execute()
+                
+                return jsonify({
+                    "success": True,
+                    "profile": {
+                        "id": user_id,
+                        "email": user.user.email,
+                        "username": user.user.email.split('@')[0],
+                        "avatar_url": None,
+                        "bio": "",
+                        "listening_count": 0,
+                        "favorites_count": 0
+                    }
+                }), 200
+                
+        except Exception as auth_err:
+            return jsonify({"error": f"Authentication error: {str(auth_err)}"}), 401
+            
+    except Exception as err:
+        return jsonify({"error": f"Server error: {str(err)}"}), 500
+
+
+@app.route("/profile", methods=["PUT"])
+def update_profile():
+    """Update user profile information"""
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        token = auth_header.split(" ")[1]
+        
+        # Get user from token
+        try:
+            user = supabase.auth.get_user(token)
+            if not user or not user.user:
+                return jsonify({"error": "Invalid token"}), 401
+            
+            user_id = user.user.id
+            data = request.json or {}
+            
+            # Prepare update data
+            update_data = {}
+            if "username" in data:
+                username = data["username"].strip()
+                if len(username) < 3:
+                    return jsonify({"error": "Username must be at least 3 characters"}), 400
+                update_data["username"] = username
+            
+            if "bio" in data:
+                update_data["bio"] = data["bio"].strip()
+            
+            if "avatar_url" in data:
+                update_data["avatar_url"] = data["avatar_url"].strip()
+            
+            if not update_data:
+                return jsonify({"error": "No valid fields to update"}), 400
+            
+            # Update profile
+            response = supabase.table("profiles").update(update_data).eq("id", user_id).execute()
+            
+            if response.data:
+                return jsonify({
+                    "success": True,
+                    "message": "Profile updated successfully",
+                    "profile": response.data[0]
+                }), 200
+            else:
+                return jsonify({"error": "Failed to update profile"}), 400
+                
+        except Exception as auth_err:
+            return jsonify({"error": f"Authentication error: {str(auth_err)}"}), 401
+            
+    except Exception as err:
+        return jsonify({"error": f"Server error: {str(err)}"}), 500
+
+
+@app.route("/profile/stats", methods=["GET"])
+def get_profile_stats():
+    """Get user listening statistics"""
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        token = auth_header.split(" ")[1]
+        
+        try:
+            user = supabase.auth.get_user(token)
+            if not user or not user.user:
+                return jsonify({"error": "Invalid token"}), 401
+            
+            user_id = user.user.id
+            
+            # Get listening history with emotion breakdown
+            history_response = supabase.table("listening_history").select("*").eq("user_id", user_id).execute()
+            
+            emotion_counts = {}
+            total_listening_time = 0
+            
+            if history_response.data:
+                for entry in history_response.data:
+                    emotion = entry.get("emotion", "neutral")
+                    emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
+                    total_listening_time += entry.get("duration", 180)  # Default 3 min
+            
+            # Get top emotions
+            top_emotions = sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+            
+            return jsonify({
+                "success": True,
+                "stats": {
+                    "total_songs_played": len(history_response.data) if history_response.data else 0,
+                    "total_listening_time": total_listening_time,
+                    "emotion_breakdown": emotion_counts,
+                    "top_emotions": [{"emotion": e[0], "count": e[1]} for e in top_emotions]
+                }
+            }), 200
+            
+        except Exception as auth_err:
+            return jsonify({"error": f"Authentication error: {str(auth_err)}"}), 401
+            
+    except Exception as err:
+        return jsonify({"error": f"Server error: {str(err)}"}), 500
+
+
+@app.route("/profile/avatar", methods=["POST"])
+def upload_avatar():
+    """Upload user avatar image"""
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Unauthorized"}), 401
+        
+        token = auth_header.split(" ")[1]
+        
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        allowed = {'png', 'jpg', 'jpeg', 'gif'}
+        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if ext not in allowed:
+            return jsonify({"error": "Invalid file type"}), 400
+        
+        try:
+            user = supabase.auth.get_user(token)
+            if not user or not user.user:
+                return jsonify({"error": "Invalid token"}), 401
+            
+            user_id = user.user.id
+            
+            # Save file locally
+            filename = f"avatar_{user_id}_{int.from_bytes(os.urandom(4), 'big')}.{ext}"
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            avatar_url = f"/static/uploads/{filename}"
+            
+            # Update profile with avatar URL
+            supabase.table("profiles").update({"avatar_url": avatar_url}).eq("id", user_id).execute()
+            
+            return jsonify({
+                "success": True,
+                "message": "Avatar uploaded successfully",
+                "avatar_url": avatar_url
+            }), 200
+            
+        except Exception as auth_err:
+            return jsonify({"error": f"Authentication error: {str(auth_err)}"}), 401
+            
+    except Exception as err:
+        return jsonify({"error": f"Server error: {str(err)}"}), 500
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
