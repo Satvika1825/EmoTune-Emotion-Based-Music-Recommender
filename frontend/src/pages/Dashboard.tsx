@@ -24,6 +24,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+// import { ProfilePage } from "./ProfilePage";
+import musicBackground from "@/assets/music-background.jpg";
 
 const BACKEND_URL = "http://localhost:5000";
 
@@ -52,8 +54,11 @@ const emotionEmojis = {
   disgust: "🤢"
 };
 
+
 const Dashboard = () => {
   const [currentEmotion, setCurrentEmotion] = useState<string>("happy");
+  const [showProfile, setShowProfile] = useState(false);
+  const [activeTab, setActiveTab] = useState<"upload" | "camera" | "url">("upload");
   const [confidence, setConfidence] = useState<number>(0);
   const [songs, setSongs] = useState<Song[]>([]);
   const [allMoodSongs, setAllMoodSongs] = useState<Record<string, Song[]>>({});
@@ -368,13 +373,13 @@ const Dashboard = () => {
   const filteredSongs = getSortedAndFilteredSongs();
 
   const emotionColors = {
-    happy: "from-yellow-400 via-orange-400 to-yellow-500",
-    sad: "from-blue-400 via-purple-400 to-blue-500",
-    angry: "from-red-400 via-pink-400 to-red-500",
-    surprise: "from-pink-400 via-purple-400 to-pink-500",
-    neutral: "from-gray-400 via-slate-400 to-gray-500",
-    fear: "from-purple-400 via-indigo-400 to-purple-500",
-    disgust: "from-green-400 via-emerald-400 to-green-500",
+    happy: "from-yellow-200 via-yellow-300 to-orange-300",
+    sad: "from-blue-200 via-blue-300 to-purple-300",
+    angry: "from-red-200 via-red-300 to-pink-300",
+    surprise: "from-pink-200 via-pink-300 to-purple-300",
+    neutral: "from-gray-200 via-gray-300 to-slate-300",
+    fear: "from-purple-200 via-purple-300 to-indigo-300",
+    disgust: "from-green-200 via-green-300 to-emerald-300",
   };
 
   const emotionGlows = {
@@ -387,6 +392,15 @@ const Dashboard = () => {
     disgust: "shadow-green-500/50",
   };
 
+  const bokehColors = [
+    "bg-pink-500/30",
+    "bg-fuchsia-500/30",
+    "bg-purple-500/30",
+    "bg-violet-500/30",
+    "bg-rose-500/30",
+    "bg-magenta-500/30",
+  ];
+
   const navItems = [
     { id: "home", icon: Home, label: "Home" },
     { id: "search", icon: Search, label: "Search" },
@@ -394,33 +408,57 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className={`min-h-screen relative overflow-hidden bg-gradient-to-br ${emotionColors[currentEmotion as keyof typeof emotionColors]} transition-all duration-1000`}>
+    <div className="min-h-screen relative overflow-hidden bg-black">
+      {/* Music background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url(${musicBackground})` }}
+      />
+      {/* Dark overlay for better contrast */}
+      <div className="absolute inset-0 bg-black/40"></div>
+
+      {/* Subtle bokeh effect */}
+      <div className="absolute inset-0 overflow-hidden opacity-40 pointer-events-none">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <motion.div
+            key={`bokeh-${i}`}
+            className={`absolute rounded-full blur-3xl ${bokehColors[i % bokehColors.length]
+              }`}
+            style={{
+              width: Math.random() * 300 + 150,
+              height: Math.random() * 300 + 150,
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+            }}
+            animate={{
+              scale: [1, 1.3, 1],
+              opacity: [0.2, 0.4, 0.2],
+            }}
+            transition={{
+              duration: Math.random() * 8 + 6,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: Math.random() * 3,
+            }}
+          />
+        ))}
+      </div>
+
       {currentSong && (
         <audio ref={audioRef} src={currentSong.audio}
           onError={() => toast({ title: "Playback error", description: "Could not play this track", variant: "destructive" })}
         />
       )}
 
-      {/* Floating Emojis Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(6)].map((_, i) => (
-          <motion.div key={i} className="absolute text-6xl opacity-5"
-            initial={{ x: Math.random() * 1000, y: -100 }}
-            animate={{ y: 1000, x: Math.random() * 1000 }}
-            transition={{ duration: 20 + Math.random() * 10, repeat: Infinity, delay: i * 2 }}
-          >
-            {emotionEmojis[currentEmotion as keyof typeof emotionEmojis]}
-          </motion.div>
-        ))}
-      </div>
+      {/* Floating Emojis Background - Removed as requested to match Login page style */}
 
-      <div className="flex h-screen">
+      <div className="flex h-screen relative z-10">
         {/* Sidebar */}
         <motion.aside
           initial={false}
           animate={{ width: sidebarExpanded ? 240 : 72 }}
           transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="h-full bg-background/30 backdrop-blur-xl border-r border-white/10 flex flex-col z-50 fixed left-0 top-0"
+          className="h-full bg-white/5 backdrop-blur-2xl border-r border-white/20 flex flex-col z-50 fixed left-0 top-0 shadow-2xl"
         >
           {/* Logo & Toggle */}
           <div className="p-4 flex items-center justify-between border-b border-white/10">
@@ -439,7 +477,7 @@ const Dashboard = () => {
               variant="ghost"
               size="icon"
               onClick={() => setSidebarExpanded(!sidebarExpanded)}
-              className="text-black/70 hover:text-black hover:bg-black/10"
+              className="text-white/70 hover:text-white hover:bg-white/10"
             >
               {sidebarExpanded ? <ChevronLeft className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </Button>
@@ -454,8 +492,8 @@ const Dashboard = () => {
                     key={item.id}
                     onClick={() => setActiveNav(item.id)}
                     className={`w-full flex items-center gap-4 px-3 py-3 rounded-lg transition-all ${activeNav === item.id
-                      ? "bg-black/20 text-black"
-                      : "text-black/60 hover:text-black hover:bg-black/10"
+                      ? "bg-white/20 text-white"
+                      : "text-white/60 hover:text-white hover:bg-white/10"
                       }`}
                     whileHover={{ x: 4 }}
                     whileTap={{ scale: 0.98 }}
@@ -479,7 +517,7 @@ const Dashboard = () => {
                 {/* Create Playlist */}
                 <motion.button
                   onClick={() => toast({ title: "Create Playlist", description: "Feature coming soon!" })}
-                  className="w-full flex items-center gap-4 px-3 py-3 rounded-lg text-black/60 hover:text-black hover:bg-black/10 transition-all mt-4"
+                  className="w-full flex items-center gap-4 px-3 py-3 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-all mt-4"
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -508,7 +546,7 @@ const Dashboard = () => {
                     exit={{ opacity: 0, height: 0 }}
                     className="border-t border-white/10 p-4"
                   >
-                    <h3 className="text-xs font-semibold text-black/40 uppercase tracking-wider mb-3">
+                    <h3 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">
                       Recent Moods
                     </h3>
                     <div className="space-y-2">
@@ -525,8 +563,8 @@ const Dashboard = () => {
                             {emotionEmojis[mood.emotion as keyof typeof emotionEmojis]}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-black capitalize truncate">{mood.emotion}</p>
-                            <p className="text-xs text-black/40">{mood.confidence}% confident</p>
+                            <p className="text-sm text-white capitalize truncate">{mood.emotion}</p>
+                            <p className="text-xs text-white/40">{mood.confidence}% confident</p>
                           </div>
                         </motion.button>
                       ))}
@@ -560,7 +598,7 @@ const Dashboard = () => {
               <motion.button
                 onClick={handleSignOut}
                 className={`w-full flex items-center gap-4 px-3 py-2 rounded-lg transition-colors ${currentEmotion === 'happy'
-                  ? 'text-black hover:bg-black/10'
+                  ? 'text-white hover:bg-white/10'
                   : 'text-red-500 hover:text-red-400 hover:bg-red-500/10'
                   }`}
               >
@@ -592,7 +630,7 @@ const Dashboard = () => {
           <motion.nav
             initial={{ y: -100 }}
             animate={{ y: 0 }}
-            className="sticky top-0 z-40 backdrop-blur-xl bg-background/30 border-b border-white/10"
+            className="sticky top-0 z-40 backdrop-blur-2xl bg-white/5 border-b border-white/20 shadow-lg"
           >
             <div className="px-6 py-4 flex items-center justify-between gap-6">
               {/* Left: Logo */}
@@ -604,14 +642,14 @@ const Dashboard = () => {
                 >
                   🎵
                 </motion.div>
-                <h1 className={`text-2xl font-bold ${currentEmotion === 'happy' ? 'text-black' : 'bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent'}`}>
+                <h1 className={`text-2xl font-bold ${currentEmotion === 'happy' ? 'text-white' : 'bg-gradient-to-r from-primary to-pink-500 bg-clip-text text-transparent'}`}>
                   EmoTune
                 </h1>
               </div>
 
               {/* Center: Home icon + Search Bar and Detect Mood Button */}
               <div className="flex-1 flex items-center justify-center gap-2">
-                <Button variant="ghost" size="icon" className="relative" onClick={() => {
+                <Button variant="ghost" size="icon" className="relative text-white" onClick={() => {
                   setCurrentEmotion("happy");
                   setConfidence(0);
                   setSongs([]);
@@ -620,34 +658,42 @@ const Dashboard = () => {
                   <Home className="w-5 h-5" />
                 </Button>
                 <div className="relative w-full max-w-md">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/50" />
                   <Input
                     type="text"
                     placeholder="What do you want to play?"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-white/10 border-white/20 placeholder:text-muted-foreground focus:bg-white/20"
+                    className="pl-10 bg-white/10 border-white/20 placeholder:text-white/50 text-white focus:bg-white/20"
                   />
                 </div>
-                <Button onClick={toggleMoodDetector} variant="outline" className="backdrop-blur-md bg-white/10 border-white/20">Detect Mood</Button>
+                <Button onClick={toggleMoodDetector} variant="outline" className="backdrop-blur-md bg-white/10 border-white/20 text-white">Detect Mood</Button>
               </div>
 
               {/* Right: Notification, Profile, Logout */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Button variant="ghost" size="icon" className="relative">
+                <Button variant="ghost" size="icon" className="relative text-white">
                   <Bell className="w-5 h-5" />
                 </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative">
+                    <Button variant="ghost" size="icon" className="relative text-white">
                       <User className="w-5 h-5" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-xl border border-white/20">
+                  <DropdownMenuContent align="end" className="w-48 bg-black/95 backdrop-blur-xl border border-white/20 text-white">
                     <div className="px-4 py-2.5 border-b border-white/10">
                       <p className="text-sm font-semibold">Profile</p>
-                      <p className="text-xs text-muted-foreground truncate">{userEmail || "User"}</p>
+                      <p className="text-xs text-white/70 truncate">{userEmail || "User"}</p>
                     </div>
+                    <DropdownMenuItem onClick={() => setShowProfile(true)} className="cursor-pointer">
+                      <User className="w-4 h-4 mr-2" />
+                      View Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-400">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Sign Out
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <Button variant="outline" size="icon" onClick={handleSignOut} className="relative text-red-400 border-red-400/50 hover:bg-red-400/10 hover:text-red-300">
@@ -658,50 +704,38 @@ const Dashboard = () => {
           </motion.nav>
 
           <AnimatePresence>
-            {moodDetectorVisible && (
+            {showProfile && (
               <motion.div
-                initial={{ opacity: 0, y: -20, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: 'auto' }}
-                exit={{ opacity: 0, y: -20, height: 0 }}
-                transition={{ duration: 0.3 }}
-                className="px-6 pt-4 overflow-hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
+                onClick={() => setShowProfile(false)}
               >
-                <div className="backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl p-4">
-                  <h3 className="text-lg font-semibold mb-3">Detect Your Mood</h3>
-                  {cameraActive ? (
-                    <div className="space-y-3">
-                      <video ref={videoRef} autoPlay playsInline className="w-full max-w-md mx-auto rounded-lg" />
-                      <div className="flex gap-3 justify-center">
-                        <Button onClick={capturePhoto} disabled={isLoading} size="sm">
-                          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                          Capture
-                        </Button>
-                        <Button onClick={stopCamera} variant="outline" size="sm">Cancel</Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-3">
-                      <Button onClick={startCamera} size="sm" disabled={isLoading}>
-                        <Camera className="w-4 h-4 mr-2" />Webcam
-                      </Button>
-                      <Button variant="outline" size="sm" disabled={isLoading} onClick={() => document.getElementById('file-upload')?.click()}>
-                        {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                        Upload
-                      </Button>
-                      <input id="file-upload" type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                      <div className="flex gap-2 flex-1 min-w-[200px]">
-                        <Input placeholder="Image URL..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-                          className="backdrop-blur-md bg-white/10 border-white/20 h-9" disabled={isLoading} />
-                        <Button variant="secondary" onClick={handleUrlSubmit} disabled={isLoading} size="sm">
-                          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="fixed inset-4 md:inset-10 lg:inset-20 bg-transparent rounded-2xl overflow-auto"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button
+                    onClick={() => setShowProfile(false)}
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-4 right-4 z-10 bg-white/20 hover:bg-white/30 text-white rounded-full"
+                  >
+                    <X className="w-6 h-6" />
+                  </Button>
+                  {/* <ProfilePage /> */}
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-white text-xl">Profile page temporarily unavailable</p>
+                  </div>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
+
 
           {/* Content Area */}
           <div className="px-6 py-6 pb-32 space-y-8">
@@ -713,7 +747,7 @@ const Dashboard = () => {
                 <div className="w-16 h-full bg-gradient-to-br from-purple-700 to-blue-700 flex items-center justify-center flex-shrink-0">
                   <Heart className="w-7 h-7 text-white fill-white" />
                 </div>
-                <span className="font-bold px-4 truncate">Liked Songs</span>
+                <span className="font-bold px-4 truncate text-white">Liked Songs</span>
                 <div className="ml-auto mr-4 opacity-0 group-hover:opacity-100 transition-opacity shadow-xl bg-green-500 rounded-full p-2 scale-90 group-hover:scale-100">
                   <Play className="w-4 h-4 text-black fill-black ml-0.5" />
                 </div>
@@ -729,7 +763,7 @@ const Dashboard = () => {
                     </span>
                     <div className="overflow-hidden">
                       <p className={`text-sm text-white/80`}>Current Vibe</p>
-                      <p className="font-bold capitalize truncate">{currentEmotion}</p>
+                      <p className="font-bold capitalize truncate text-white">{currentEmotion}</p>
                       <p className={`text-xs text-white/60`}>{confidence}% confidence</p>
                     </div>
                   </div>
@@ -759,21 +793,21 @@ const Dashboard = () => {
                     <div className="w-16 h-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center flex-shrink-0">
                       <span className="text-3xl">😊</span>
                     </div>
-                    <span className="font-bold px-4 truncate">Happy Mood Mix</span>
+                    <span className="font-bold px-4 truncate text-white">Happy Mood Mix</span>
                   </div>
                   {/* Calm and Relaxed */}
                   <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-md flex items-center overflow-hidden cursor-pointer group h-16">
                     <div className="w-16 h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center flex-shrink-0">
                       <span className="text-3xl">😌</span>
                     </div>
-                    <span className="font-bold px-4 truncate">Calm and Relaxed</span>
+                    <span className="font-bold px-4 truncate text-white">Calm and Relaxed</span>
                   </div>
                   {/* Energetic Vibes */}
                   <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-md flex items-center overflow-hidden cursor-pointer group h-16">
                     <div className="w-16 h-full bg-gradient-to-br from-pink-500 to-red-500 flex items-center justify-center flex-shrink-0">
                       <span className="text-3xl">⚡️</span>
                     </div>
-                    <span className="font-bold px-4 truncate">Energetic Vibes</span>
+                    <span className="font-bold px-4 truncate text-white">Energetic Vibes</span>
                   </div>
                 </>
               )}
@@ -782,7 +816,7 @@ const Dashboard = () => {
             {/* Emotion-based Playlist Section or All Moods Section */}
             {songs.length > 0 ? (
               <section className="mt-8">
-                <h2 className="text-2xl font-bold mb-4 capitalize">{currentEmotion} Playlist</h2>
+                <h2 className="text-2xl font-bold mb-4 capitalize text-white">{currentEmotion} Playlist</h2>
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-4">
                     <Button
@@ -883,7 +917,7 @@ const Dashboard = () => {
                 {Object.entries(allMoodSongs).map(([emotion, tracks]) => (
                   <div key={emotion}>
                     <div className="flex items-center justify-between mb-3">
-                      <h2 className="text-xl font-bold hover:underline cursor-pointer capitalize flex items-center gap-2">
+                      <h2 className="text-xl font-bold hover:underline cursor-pointer capitalize flex items-center gap-2 text-white">
                         <span>{emotionEmojis[emotion as keyof typeof emotionEmojis]}</span>
                         {emotion} Vibes
                       </h2>
@@ -1027,6 +1061,121 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Mood Detector Modal */}
+      <AnimatePresence>
+        {moodDetectorVisible && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-black/80 border border-white/10 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative overflow-hidden"
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-4 right-4 text-white/50 hover:text-white hover:bg-white/10"
+                onClick={toggleMoodDetector}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+
+              <h2 className="text-2xl font-bold text-white mb-6 text-center">How are you feeling?</h2>
+
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                <Button
+                  variant={activeTab === "upload" ? "secondary" : "ghost"}
+                  className="flex flex-col items-center gap-2 h-auto py-3"
+                  onClick={() => { setActiveTab("upload"); stopCamera(); }}
+                >
+                  <Upload className="w-6 h-6" />
+                  <span className="text-xs">Upload</span>
+                </Button>
+                <Button
+                  variant={activeTab === "camera" ? "secondary" : "ghost"}
+                  className="flex flex-col items-center gap-2 h-auto py-3"
+                  onClick={() => { setActiveTab("camera"); startCamera(); }}
+                >
+                  <Camera className="w-6 h-6" />
+                  <span className="text-xs">Camera</span>
+                </Button>
+                <Button
+                  variant={activeTab === "url" ? "secondary" : "ghost"}
+                  className="flex flex-col items-center gap-2 h-auto py-3"
+                  onClick={() => { setActiveTab("url"); stopCamera(); }}
+                >
+                  <Link2 className="w-6 h-6" />
+                  <span className="text-xs">URL</span>
+                </Button>
+              </div>
+
+              <div className="min-h-[200px] flex flex-col items-center justify-center bg-white/5 rounded-xl p-4 relative">
+                {isLoading ? (
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-10 h-10 animate-spin text-green-500" />
+                    <p className="text-sm text-white/70">Analyzing your vibe...</p>
+                  </div>
+                ) : (
+                  <>
+                    {activeTab === "camera" && (
+                      <div className="relative w-full h-full flex flex-col items-center gap-4">
+                        {!cameraActive ? (
+                          <Button onClick={startCamera}>Start Camera</Button>
+                        ) : (
+                          <>
+                            <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-lg bg-black aspect-video object-cover" />
+                            <div className="flex gap-3">
+                              <Button variant="destructive" onClick={stopCamera}>Stop</Button>
+                              <Button onClick={capturePhoto} className="bg-green-500 hover:bg-green-600 text-black">Capture</Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {activeTab === "upload" && (
+                      <div className="flex flex-col items-center gap-4 w-full">
+                        <div className="border-2 border-dashed border-white/20 rounded-xl p-8 w-full flex flex-col items-center justify-center text-center hover:bg-white/5 transition-colors cursor-pointer relative">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileUpload}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                          <Upload className="w-10 h-10 text-white/50 mb-3" />
+                          <p className="text-sm font-medium text-white">Click to upload or drag and drop</p>
+                          <p className="text-xs text-white/50 mt-1">SVG, PNG, JPG or GIF</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "url" && (
+                      <div className="flex flex-col items-center gap-4 w-full">
+                        <Input
+                          type="url"
+                          placeholder="Paste image URL here..."
+                          value={imageUrl}
+                          onChange={(e) => setImageUrl(e.target.value)}
+                          className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                        />
+                        <Button onClick={handleUrlSubmit} className="w-full bg-green-500 hover:bg-green-600 text-black">
+                          Analyze URL
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
